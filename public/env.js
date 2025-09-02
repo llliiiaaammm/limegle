@@ -1,11 +1,13 @@
 // Copy this file to /env.js and fill in your values.
 // Supabase anon key is public by design. TURN is strongly recommended in production.
 window.ENV = {
-  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR-SUPABASE-ANON-KEY",
+  SUPABASE_URL: "https://bvctfxmrkwtwljsluilt.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2Y3RmeG1ya3d0d2xqc2x1aWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4NTUzNDIsImV4cCI6MjA3MjQzMTM0Mn0.GpXsQ2AKxLtwZYxSa5lgeaHqJ5hyHBGAloFMfDUOoXw",
   ICE_SERVERS: [
     { urls: "stun:stun.l.google.com:19302" },
-    // Add a TURN service for reliability (Twilio, Xirsys, Cloudflare Calls, or your Coturn)
-    // { urls: "turn:YOUR_TURN_HOST:3478", username: "USER", credential: "PASS" }
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" }
   ]
 };
