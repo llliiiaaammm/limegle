@@ -4,47 +4,88 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>limegle</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    :root{
+      --bg:#ffffff; --text:#1f2328; --muted:#6b7280;
+      --panel:#f7f7f8; --panel-2:#f0f2f5; --border:#e5e7eb; --shadow:rgba(0,0,0,.06);
+      --accent-blue:#4d89d8; --accent-orange:#e9914f;
+      --success:#3aa378; --danger:#d16464;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:var(--bg); color:var(--text); font:15px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif}
+
+    .topbar{position:sticky; top:0; z-index:10; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; padding:10px 16px; background:#fff; border-bottom:1px solid var(--border); box-shadow:0 2px 8px var(--shadow)}
+    .brand{margin:0; font-size:28px; font-weight:800; letter-spacing:.3px; color:var(--accent-blue)}
+    .right-id{justify-self:end; color:var(--muted); font-variant-numeric:tabular-nums}
+    .link{color:var(--accent-blue); text-decoration:none; font-weight:600; padding:6px 4px; border-radius:6px}
+    .link:hover{text-decoration:underline}
+    .sep{color:var(--border)}
+
+    .layout{display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; padding:14px; max-width:1280px; margin:0 auto}
+    @media (max-width:1000px){ .layout{grid-template-columns:1fr} }
+
+    .video-col{display:grid; gap:14px}
+    .tile{position:relative; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 3px 14px var(--shadow)}
+    .tile video{width:100%; height:100%; display:block; object-fit:cover; aspect-ratio:16/9; background:#000}
+    .overlay{position:absolute; display:flex; gap:8px; z-index:2}
+    .top-right{top:8px; right:8px}
+    .icon{border:1px solid var(--border); background:#fff; color:var(--text); padding:6px 10px; min-width:40px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:999px; box-shadow:0 1px 6px var(--shadow)}
+    .icon[disabled]{opacity:.6; cursor:not-allowed}
+    .label{position:absolute; left:10px; top:8px; color:var(--muted); font-size:13px; background:rgba(255,255,255,.8); padding:4px 8px; border:1px solid var(--border); border-radius:8px}
+    .ribbon{position:absolute; left:10px; bottom:8px; color:var(--muted); font-size:13px; background:rgba(255,255,255,.85); padding:6px 10px; border:1px solid var(--border); border-radius:8px}
+
+    .skip-btn{position:absolute; top:50%; right:10px; transform:translateY(-50%); border:1px solid var(--border); background:#fff; color:var(--text); padding:8px 12px; border-radius:999px; box-shadow:0 1px 6px var(--shadow); cursor:pointer}
+    .skip-btn:hover{background:var(--panel-2)}
+
+    .chat-pane{background:#fff; border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; box-shadow:0 3px 14px var(--shadow); min-height:420px; overflow:hidden}
+    .chat-header{padding:10px 12px; font-weight:700; background:var(--panel-2); border-bottom:1px solid var(--border)}
+    .chat-log{flex:1; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px; background:var(--panel)}
+    .msg{display:flex; gap:8px; align-items:flex-start}
+    .msg .who{min-width:70px; color:var(--muted)}
+    .msg .bubble{padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:#fff; max-width:100%}
+    .msg.you .bubble{background:color-mix(in oklab, var(--accent-blue) 6%, #fff)}
+    .msg.peer .bubble{background:color-mix(in oklab, var(--accent-orange) 6%, #fff)}
+    .msg.system .bubble{background:#fafafa; color:var(--muted)}
+    .chat-input{display:flex; gap:8px; padding:10px; border-top:1px solid var(--border); background:#fff}
+    .chat-input input{flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); outline:none}
+
+    /* Join CTA overlay */
+    .join-cta{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50}
+    .join-bar{width:100%; max-width:900px; margin:0 16px; background:rgba(0,0,0,.08); border:1px solid var(--border); backdrop-filter:saturate(120%) blur(2px); box-shadow:0 6px 24px var(--shadow); border-radius:12px; padding:16px; text-align:center}
+    .join-title{font-size:20px; font-weight:800; letter-spacing:.5px}
+    .join-sub{margin-top:4px; color:var(--muted)}
+  </style>
 </head>
 <body>
   <header class="topbar">
-    <div class="left-actions">
-      <button id="callBtn" class="btn btn-accent">Call</button>
-      <button id="helpBtn" class="btn btn-warn" title="Not wired yet">Help</button>
-    </div>
+    <a href="#" class="link" id="callLink">call</a>
     <h1 class="brand">limegle</h1>
-    <div class="right-id">user-<span id="userId">—</span></div>
+    <a href="#" class="link" id="helpLink">help</a>
+    <div class="right-id">user id: <span id="userId">—</span></div>
   </header>
 
   <main class="layout">
     <section class="video-col">
-      <!-- Remote (big / primary) -->
       <div class="tile" id="remoteTile">
+        <span class="label">Stranger</span>
         <video id="remoteVideo" autoplay playsinline></video>
         <div class="overlay top-right">
-          <!-- Indicators only (read-only) -->
-          <button class="icon pill" id="remoteMic" disabled title="Remote mic">
-            <span>🎙</span>
-          </button>
-          <button class="icon pill" id="remoteCam" disabled title="Remote camera">
-            <span>📷</span>
-          </button>
+          <button class="icon" id="remoteMic" disabled title="Remote mic"><span>🎙</span></button>
+          <button class="icon" id="remoteCam" disabled title="Remote camera"><span>📷</span></button>
         </div>
-        <div class="ribbon" id="remoteRibbon">Waiting for a partner…</div>
+        <div class="ribbon" id="remoteRibbon">waiting for others…</div>
       </div>
 
-      <!-- Local (secondary) -->
       <div class="tile" id="localTile">
+        <span class="label">you</span>
         <video id="localVideo" autoplay playsinline muted></video>
         <div class="overlay top-right">
-          <button class="icon pill" id="toggleMic" title="Toggle microphone (you)">
-            <span id="micEmoji">🎙</span>
-          </button>
-          <button class="icon pill" id="toggleCam" title="Toggle camera (you)">
-            <span id="camEmoji">📷</span>
-          </button>
+          <button class="icon" id="toggleMic" title="Toggle microphone (you)"><span id="micEmoji">🎙</span></button>
+          <button class="icon" id="toggleCam" title="Toggle camera (you)"><span id="camEmoji">📷</span></button>
         </div>
-        <div class="ribbon" id="localRibbon">You</div>
+        <button class="skip-btn" id="skipBtn" title="Next">Skip ▷</button>
+        <div class="ribbon" id="localRibbon">you</div>
       </div>
     </section>
 
@@ -53,16 +94,181 @@
       <div id="chatLog" class="chat-log"></div>
       <form id="chatForm" class="chat-input" autocomplete="off">
         <input id="chatText" placeholder="Type a message…" />
-        <button class="btn btn-primary" type="submit">Send</button>
+        <button class="icon" type="submit" title="Send"><span>➤</span></button>
       </form>
     </aside>
   </main>
 
-  <!-- Env (fill in, see env.example.js) -->
+  <!-- Join CTA overlay -->
+  <div id="joinCta" class="join-cta" role="button" tabindex="0">
+    <div class="join-bar">
+      <div class="join-title">TAP TO JOIN PUBLIC CHAT</div>
+      <div class="join-sub">press here to call</div>
+    </div>
+  </div>
+
   <script src="/env.js"></script>
-  <!-- Supabase -->
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-  <!-- App -->
-  <script src="/app.js"></script>
+  <script>
+  /* global supabase, ENV */
+  (() => {
+    const els = {
+      userId: document.getElementById('userId'),
+      callLink: document.getElementById('callLink'),
+      helpLink: document.getElementById('helpLink'),
+      remoteVideo: document.getElementById('remoteVideo'),
+      localVideo: document.getElementById('localVideo'),
+      remoteMic: document.getElementById('remoteMic'),
+      remoteCam: document.getElementById('remoteCam'),
+      micEmoji: document.getElementById('micEmoji'),
+      camEmoji: document.getElementById('camEmoji'),
+      toggleMic: document.getElementById('toggleMic'),
+      toggleCam: document.getElementById('toggleCam'),
+      remoteRibbon: document.getElementById('remoteRibbon'),
+      localRibbon: document.getElementById('localRibbon'),
+      chatLog: document.getElementById('chatLog'),
+      chatForm: document.getElementById('chatForm'),
+      chatText: document.getElementById('chatText'),
+      joinCta: document.getElementById('joinCta'),
+      skipBtn: document.getElementById('skipBtn'),
+    };
+
+    const uid = (() => {
+      const k = 'limegle_uid';
+      let v = localStorage.getItem(k);
+      if (!v) { v = (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0).toString(36).slice(-6); localStorage.setItem(k, v); }
+      return v;
+    })();
+    els.userId.textContent = uid;
+
+    const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
+    const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: true } } });
+
+    let waiting = false, roomId = null, room = null;
+    let pc = null, dc = null, localStream = null;
+    let remoteMicOn = null, remoteCamOn = null;
+    let micOn = true, camOn = true;
+
+    const ICE_SERVERS = (ENV.ICE_SERVERS && ENV.ICE_SERVERS.length) ? ENV.ICE_SERVERS : [{ urls: 'stun:stun.l.google.com:19302' }];
+
+    function logSys(text){ pushMsg('system','system',text); }
+    function pushMsg(whoClass, whoLabel, text){
+      const row = document.createElement('div'); row.className = `msg ${whoClass}`;
+      const who = document.createElement('div'); who.className = 'who'; who.textContent = whoLabel;
+      const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = text;
+      row.appendChild(who); row.appendChild(bubble); els.chatLog.appendChild(row);
+      els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    }
+    function updateLocalButtons(){
+      els.micEmoji.textContent = micOn ? '🎙' : '🔇';
+      els.camEmoji.textContent = camOn ? '📷' : '🚫';
+      els.localRibbon.textContent = micOn && camOn ? 'You' : (micOn && !camOn ? 'You (camera off)' : (!micOn && camOn ? 'You (mic off)' : 'You (mic & camera off)'));
+    }
+    function updateRemoteIndicators(){
+      const micOk = remoteMicOn !== false; const camOk = remoteCamOn !== false;
+      els.remoteMic.innerHTML = `<span>${micOk ? '🎙' : '🔇'}</span>`;
+      els.remoteCam.innerHTML = `<span>${camOk ? '📷' : '🚫'}</span>`;
+      const flags = []; if (remoteMicOn === false) flags.push('mic off'); if (remoteCamOn === false) flags.push('camera off');
+      els.remoteRibbon.textContent = flags.length ? `Partner (${flags.join(' / ')})` : 'Partner';
+    }
+
+    async function getMedia(){
+      if (localStream) return localStream;
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
+      els.localVideo.srcObject = localStream; return localStream;
+    }
+    function applyLocalTrackState(){ if (!localStream) return; const a=localStream.getAudioTracks()[0]; const v=localStream.getVideoTracks()[0]; if (a) a.enabled=!!micOn; if (v) v.enabled=!!camOn; }
+    function sendState(){ if (dc && dc.readyState==='open') dc.send(JSON.stringify({ kind:'state', mic:!!micOn, cam:!!camOn })); }
+
+    function createPC(isCaller){
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      pc.onicecandidate = (e)=>{ if (e.candidate) room?.send({ type:'broadcast', event:'signal', payload:{ t:'candidate', c:e.candidate } }); };
+      pc.onconnectionstatechange = ()=>{ const s=pc.connectionState; if (s==='failed'||s==='disconnected'||s==='closed') cleanupRoom('Connection ended'); };
+      pc.ontrack = (e)=>{ els.remoteVideo.srcObject = e.streams[0]; els.remoteRibbon.textContent = 'Partner'; };
+      if (isCaller){ dc = pc.createDataChannel('chat'); attachDC(); } else { pc.ondatachannel = (e)=>{ dc=e.channel; attachDC(); }; }
+    }
+    function attachDC(){
+      dc.onopen = ()=>{ sendState(); logSys('Connected.'); };
+      dc.onclose = ()=> logSys('Data channel closed.');
+      dc.onmessage = (e)=>{
+        try{ const msg = JSON.parse(e.data);
+          if (msg.kind==='chat') pushMsg('peer','Stranger',msg.text);
+          else if (msg.kind==='state'){ remoteMicOn=msg.mic; remoteCamOn=msg.cam; updateRemoteIndicators(); }
+        }catch{ pushMsg('peer','Stranger', String(e.data)); }
+      };
+    }
+
+    async function startCallFlow(asCaller){
+      await getMedia(); createPC(asCaller);
+      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+      applyLocalTrackState();
+      if (asCaller){ const offer = await pc.createOffer(); await pc.setLocalDescription(offer); await room.send({ type:'broadcast', event:'signal', payload:{ t:'offer', sdp:offer } }); }
+    }
+
+    async function joinRoom(id, asCaller){
+      if (room) return; roomId=id;
+      room = sb.channel(`limegle-room-${id}`, { config: { broadcast: { self:false } } });
+      room.on('broadcast', { event:'signal' }, async ({ payload })=>{
+        if (!pc) return;
+        if (payload.t==='offer'){ await pc.setRemoteDescription(payload.sdp); const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); await room.send({ type:'broadcast', event:'signal', payload:{ t:'answer', sdp:answer } }); }
+        else if (payload.t==='answer'){ await pc.setRemoteDescription(payload.sdp); }
+        else if (payload.t==='candidate' && payload.c){ try{ await pc.addIceCandidate(payload.c); }catch{} }
+      });
+      await room.subscribe(async (status)=>{ if (status==='SUBSCRIBED') await startCallFlow(asCaller); });
+    }
+
+    async function cleanupRoom(reason='Left'){
+      if (dc){ try{ dc.close(); }catch{} dc=null; }
+      if (pc){ try{ pc.close(); }catch{} pc=null; }
+      if (room){ try{ await room.unsubscribe(); }catch{} room=null; }
+      roomId=null; remoteMicOn=null; remoteCamOn=null; updateRemoteIndicators();
+      els.remoteVideo.srcObject=null; els.remoteRibbon.textContent='Waiting for a partner…';
+      if (!waiting) logSys(reason);
+    }
+
+    async function pickPartnerFromPresence(){
+      const state = await mm.presenceState();
+      const others = Object.entries(state).filter(([k])=>k!==uid);
+      const waitingPeers = others.map(([k,v])=>({ id:k, metas:v }))
+        .filter(row=>row.metas.some(m=>m.metas?.waiting))
+        .sort((a,b)=> (a.metas[0].metas.ts||0) - (b.metas[0].metas.ts||0));
+      return waitingPeers.length ? waitingPeers[0].id : null;
+    }
+
+    mm.on('broadcast', { event:'invite' }, async ({ payload })=>{
+      if (payload.to!==uid || room) return;
+      waiting=false; await mm.track({ waiting:false, ts:Date.now() });
+      await joinRoom(payload.roomId, false);
+    });
+
+    async function goStart(){
+      if (room) { await cleanupRoom('Restarting…'); }
+      const partner = await pickPartnerFromPresence();
+      if (partner){ const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36); await mm.send({ type:'broadcast', event:'invite', payload:{ to:partner, from:uid, roomId:id } }); await joinRoom(id, true); return; }
+      waiting = true; await mm.track({ waiting:true, ts:Date.now() });
+      logSys('Waiting for a partner…');
+    }
+
+    // Header links are no-op for now per request
+    els.callLink.addEventListener('click', e=>{ e.preventDefault(); });
+    els.helpLink.addEventListener('click', e=>{ e.preventDefault(); });
+
+    // Skip to next
+    els.skipBtn.addEventListener('click', async ()=>{ await cleanupRoom('Skipped'); await goStart(); });
+
+    // Join CTA overlay
+    const dismissJoin = ()=>{ if (els.joinCta) els.joinCta.style.display='none'; };
+    els.joinCta.addEventListener('click', async ()=>{ dismissJoin(); await goStart(); });
+    els.joinCta.addEventListener('keydown', async (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); dismissJoin(); await goStart(); } });
+
+    // Presence bootstrap
+    mm.subscribe(async (status)=>{ if (status==='SUBSCRIBED') await mm.track({ waiting:false, ts:Date.now() }); });
+
+    (async ()=>{
+      try{ await getMedia(); }catch{ logSys('Camera/mic permission denied. You can still connect with audio/video off.'); micOn=false; camOn=false; }
+      updateLocalButtons(); updateRemoteIndicators();
+    })();
+  })();
+  </script>
 </body>
 </html>
