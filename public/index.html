@@ -55,6 +55,10 @@
     .join-bar{width:100%; max-width:900px; margin:0 16px; background:rgba(0,0,0,.08); border:1px solid var(--border); backdrop-filter:saturate(120%) blur(2px); box-shadow:0 6px 24px var(--shadow); border-radius:12px; padding:16px; text-align:center}
     .join-title{font-size:20px; font-weight:800; letter-spacing:.5px}
     .join-sub{margin-top:4px; color:var(--muted)}
+
+
+    .topbar { display:flex; align-items:center; }
+    .brand { flex:1; text-align:center; }
   </style>
 </head>
 <body>
@@ -162,7 +166,7 @@
     function updateLocalButtons(){
       els.micEmoji.textContent = micOn ? '🎙' : '🔇';
       els.camEmoji.textContent = camOn ? '📷' : '🚫';
-      els.localRibbon.textContent = micOn && camOn ? 'You' : (micOn && !camOn ? 'You (camera off)' : (!micOn && camOn ? 'You (mic off)' : 'You (mic & camera off)'));
+      els.localRibbon.textContent = micOn && camOn ? '' : (micOn && !camOn ? '(camera off)' : (!micOn && camOn ? '(mic off)' : '(mic & camera off)'));
     }
     function updateRemoteIndicators(){
       const micOk = remoteMicOn !== false; const camOk = remoteCamOn !== false;
@@ -222,7 +226,7 @@
       if (pc){ try{ pc.close(); }catch{} pc=null; }
       if (room){ try{ await room.unsubscribe(); }catch{} room=null; }
       roomId=null; remoteMicOn=null; remoteCamOn=null; updateRemoteIndicators();
-      els.remoteVideo.srcObject=null; els.remoteRibbon.textContent='Waiting for a partner…';
+      els.remoteVideo.srcObject=null; //els.remoteRibbon.textContent='Waiting for a partner…';
       if (!waiting) logSys(reason);
     }
 
