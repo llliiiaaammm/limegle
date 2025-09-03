@@ -57,15 +57,26 @@
     .join-sub{margin-top:4px; color:var(--muted)}
 
 
-    .topbar { display:flex; align-items:center; }
-    .brand { flex:1; text-align:center; }
+    .topbar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    
+    .center-group {
+      display:flex;
+      align-items:center;
+      gap:12px; /* adjust spacing */
+    }
   </style>
 </head>
 <body>
   <header class="topbar">
-    <a href="#" class="link" id="callLink">call</a>
-    <h1 class="brand">limegle</h1>
-    <a href="#" class="link" id="helpLink">help</a>
+    <div class="center-group">
+      <a href="#" class="link">call</a>
+      <h1 class="brand">limegle</h1>
+      <a href="#" class="link">help</a>
+    </div>
     <div class="right-id">user id: <span id="userId">—</span></div>
   </header>
 
