@@ -68,6 +68,12 @@
       align-items:center;
       gap:12px; /* adjust spacing */
     }
+
+    .topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+    .center-group{grid-column:2;justify-self:center;display:flex;align-items:center;gap:10px}
+    .brand{margin:0;font-size:32px;font-weight:800;text-transform:lowercase}
+    .link{color:var(--accent-blue);text-decoration:none;font-weight:600;text-transform:lowercase}
+    .right-id{grid-column:3;justify-self:end;color:var(--muted);font-variant-numeric:tabular-nums}
   </style>
 </head>
 <body>
