@@ -57,13 +57,35 @@
   /* Join overlay */
   #joinCta{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.85)}
   #joinCta .joinbox{border:1px solid #000;padding:16px 20px;background:#fff;cursor:pointer;text-align:center}
+
+  /* header: center the group tightly, ID flush-right, all vertically centered */
+  header{
+    height:48px;
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    align-items:center;
+    padding:6px 8px;
+    border-bottom:1px solid #000;
+  }
+  .center-group{
+    grid-column:2;
+    justify-self:center;
+    display:flex;
+    align-items:center;
+    gap:10px;            /* reduce or increase spacing */
+  }
+  .center-group h1{ margin:0; font-size:22px; line-height:1; }
+  .center-group a{ color:#00f; text-decoration:underline; line-height:1; }
+  .right-id{ grid-column:3; justify-self:end; font-size:12px; line-height:1; }
 </style>
 </head>
 <body>
 <header>
-  <a href="#" id="callLink">call</a>
-  <h1>limegle</h1>
-  <a href="#" id="helpLink">help</a>
+  <div class="center-group">
+    <a href="#" id="callLink">call</a>
+    <h1>limegle</h1>
+    <a href="#" id="helpLink">help</a>
+  </div>
   <div class="right-id">user id: <span id="userId">—</span></div>
 </header>
 
@@ -123,6 +145,7 @@
     localVideo: document.getElementById('localVideo'),
     remoteLabel: document.getElementById('remoteLabel'),
     localLabel: document.getElementById('localLabel'),
+    localRibbon: document.getElementById('localRibbon'),
     remoteRibbon: document.getElementById('remoteRibbon'),
     remoteMicInd: document.getElementById('remoteMicInd'),
     remoteCamInd: document.getElementById('remoteCamInd'),
