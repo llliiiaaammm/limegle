@@ -4,82 +4,123 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>limegle</title>
-  <!-- simple favicon to avoid 404 -->
+
+  <!-- tiny favicon to avoid 404 -->
   <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><text x="4" y="12">l</text></svg>'>
+
+  <!-- env + supabase -->
   <script src="/env.js"></script>
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+
   <style>
-    html,body { margin:0; height:100%; }
-    body { display:flex; flex-direction:column; font-family:monospace; }
+    :root { --header-h: 44px; }
 
-    header { display:flex; justify-content:center; gap:20px; padding:4px; border-bottom:1px solid #000; }
-    header .right-id { position:absolute; right:8px; top:4px; font-size:12px; }
+    /* minimal black & white layout */
+    html, body { height:100%; margin:0; }
+    body { display:flex; flex-direction:column; font-family:monospace; color:#000; background:#fff; overflow:hidden; }
 
-    main { flex:1; display:grid; grid-template-columns:2fr 1fr; height:100%; }
-    section.videos { display:grid; grid-template-rows:1fr 1fr; border-right:1px solid #000; }
-    .box { position:relative; border-bottom:1px solid #000; display:flex; flex-direction:column; }
-    video { flex:1; width:100%; background:#ccc url('https://i.stack.imgur.com/kOnzy.gif') center center no-repeat; background-size:40px; }
+    /* centered header: call — limegle — help; user id right */
+    header {
+      height:var(--header-h);
+      display:grid;
+      grid-template-columns:1fr auto 1fr;
+      align-items:center;
+      padding:4px 8px;
+      border-bottom:1px solid #000;
+    }
+    header h1 { grid-column:2; margin:0; font-size:22px; }
+    header a { justify-self:center; color:#00f; text-decoration:underline; }
+    .right-id { grid-column:3; justify-self:end; font-size:12px; }
+
+    /* main fills viewport below header; two columns (videos 2fr, chat 1fr) */
+    main {
+      height:calc(100vh - var(--header-h));
+      display:grid; grid-template-columns:2fr 1fr; gap:8px; padding:8px;
+    }
+    @media (max-width:900px) { main { grid-template-columns:1fr; } }
+
+    /* videos column: two equal rows, no cropping */
+    section.videos { display:grid; grid-template-rows:1fr 1fr; border-right:1px solid #000; min-height:0; }
+    .box { position:relative; border-bottom:1px solid #000; display:flex; flex-direction:column; min-height:0; }
+    .box:last-child { border-bottom:none; }
+
+    video {
+      flex:1; width:100%; height:100%;
+      object-fit:contain;                    /* no cut-off */
+      background:#ccc url('https://i.stack.imgur.com/kOnzy.gif') center/40px no-repeat; /* grey with loader */
+    }
+
     .label { position:absolute; left:4px; top:2px; font-size:12px; background:#fff; }
     .ribbon { position:absolute; left:4px; bottom:2px; font-size:12px; }
-    .controls { position:absolute; right:4px; top:4px; display:flex; gap:4px; }
+
+    /* controls on right; remote indicators are spans (read-only) */
+    .controls { position:absolute; right:4px; top:4px; display:flex; gap:6px; align-items:center; }
+    .controls span { font-size:12px; pointer-events:none; }
     button { font-size:12px; }
 
-    aside.chat { display:flex; flex-direction:column; }
-    .chat-header { border-bottom:1px solid #000; padding:2px; font-weight:bold; }
-    .chat-log { flex:1; overflow:auto; padding:4px; }
-    .chat-input { display:flex; border-top:1px solid #000; }
-    .chat-input input { flex:1; }
+    /* chat column uses full height; input pinned bottom; no extra space */
+    aside.chat { display:flex; flex-direction:column; min-height:0; }
+    .chat-header { border-bottom:1px solid #000; padding:4px; font-weight:bold; }
+    .chat-log { flex:1; overflow:auto; padding:4px; min-height:0; }
+    .chat-input { display:flex; gap:6px; border-top:1px solid #000; padding:4px; }
+    .chat-input input { flex:1; min-width:0; }
 
-    /* Join overlay */
-    #joinCta { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.8); }
-    #joinCta .box { border:1px solid #000; padding:20px; background:#fff; cursor:pointer; text-align:center; }
+    /* join overlay */
+    #joinCta { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.85); }
+    #joinCta .joinbox { border:1px solid #000; padding:16px 20px; background:#fff; cursor:pointer; text-align:center; }
   </style>
 </head>
 <body>
   <header>
-    <a href="#">call</a>
+    <a href="#" id="callLink">call</a>
     <h1>limegle</h1>
-    <a href="#">help</a>
+    <a href="#" id="helpLink">help</a>
     <div class="right-id">user id: <span id="userId">—</span></div>
   </header>
 
   <main>
+    <!-- videos -->
     <section class="videos">
+      <!-- remote -->
       <div class="box" id="remoteTile">
         <span class="label">person</span>
         <video id="remoteVideo" autoplay playsinline></video>
         <div class="controls">
-          <button id="remoteMic" disabled>mic</button>
-          <button id="remoteCam" disabled>cam</button>
-          <button id="skipBtn">skip</button>
+          <span id="remoteMicInd"></span>
+          <span id="remoteCamInd"></span>
+          <button id="skipBtn" type="button">skip</button>
         </div>
         <div class="ribbon" id="remoteRibbon"></div>
       </div>
+
+      <!-- local -->
       <div class="box" id="localTile">
         <span class="label">you</span>
         <video id="localVideo" autoplay playsinline muted></video>
         <div class="controls">
-          <button id="toggleMic">mic</button>
-          <button id="toggleCam">cam</button>
+          <button id="toggleMic" type="button">mic</button>
+          <button id="toggleCam" type="button">cam</button>
         </div>
         <div class="ribbon" id="localRibbon"></div>
       </div>
     </section>
 
+    <!-- chat -->
     <aside class="chat">
       <div class="chat-header">text chat</div>
       <div id="chatLog" class="chat-log"></div>
-      <form id="chatForm" class="chat-input">
+      <form id="chatForm" class="chat-input" autocomplete="off">
         <input id="chatText" placeholder="type a message..." />
         <button type="submit">send</button>
       </form>
     </aside>
   </main>
 
-  <div id="joinCta">
-    <div class="box">
+  <!-- join overlay -->
+  <div id="joinCta" role="button" tabindex="0">
+    <div class="joinbox">
       TAP TO JOIN PUBLIC CHAT
-      <div style="font-size:12px">press here to call</div>
+      <div style="font-size:12px;margin-top:4px">press here to call</div>
     </div>
   </div>
 
@@ -91,7 +132,9 @@
     userId: document.getElementById('userId'),
     remoteVideo: document.getElementById('remoteVideo'),
     localVideo: document.getElementById('localVideo'),
-    remoteState: document.getElementById('remoteState'),
+    remoteRibbon: document.getElementById('remoteRibbon'),
+    remoteMicInd: document.getElementById('remoteMicInd'),
+    remoteCamInd: document.getElementById('remoteCamInd'),
     toggleMic: document.getElementById('toggleMic'),
     toggleCam: document.getElementById('toggleCam'),
     skipBtn: document.getElementById('skipBtn'),
@@ -110,7 +153,7 @@
   })();
   els.userId.textContent = uid;
 
-  // supabase
+  // supabase client
   const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
   const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: true } } });
 
@@ -122,7 +165,7 @@
 
   const ICE_SERVERS = (ENV.ICE_SERVERS && ENV.ICE_SERVERS.length) ? ENV.ICE_SERVERS : [{ urls: 'stun:stun.l.google.com:19302' }];
 
-  // chat helpers
+  // helpers
   function pushMsg(type, who, text){
     const row = document.createElement('div'); row.className = 'msg ' + type;
     const a = document.createElement('div'); a.className = 'who'; a.textContent = who;
@@ -131,12 +174,16 @@
     els.chatLog.appendChild(row);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
-  const logSys = t => pushMsg('system','system',t);
+  const logSys = t => pushMsg('system', 'system', t);
 
   function updateRemoteState(){
-    const m = remoteMicOn === false ? 'off' : (remoteMicOn === true ? 'on' : '?');
-    const c = remoteCamOn === false ? 'off' : (remoteCamOn === true ? 'on' : '?');
-    els.remoteState.textContent = `person (mic ${m}, camera ${c})`;
+    // build parts only for known values (no '?')
+    const parts = [];
+    if (remoteMicOn !== null) parts.push(`mic ${remoteMicOn ? 'on' : 'off'}`);
+    if (remoteCamOn !== null) parts.push(`camera ${remoteCamOn ? 'on' : 'off'}`);
+    els.remoteRibbon.textContent = parts.join(', ');
+    els.remoteMicInd.textContent = (remoteMicOn === null) ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
+    els.remoteCamInd.textContent = (remoteCamOn === null) ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
   }
 
   async function getMedia(){
@@ -152,6 +199,11 @@
     const v = localStream.getVideoTracks()[0];
     if (a) a.enabled = !!micOn;
     if (v) v.enabled = !!camOn;
+    // local ribbon text
+    const bits = [];
+    if (!micOn) bits.push('mic off');
+    if (!camOn) bits.push('camera off');
+    document.getElementById('localRibbon').textContent = bits.join(', ');
   }
 
   function sendState(){
@@ -275,7 +327,7 @@
       return;
     }
     await mm.track({ waiting:true, ts:Date.now() });
-    logSys('waiting for a person…');
+    logSys('waiting for someone…');
   }
 
   // UI
@@ -283,6 +335,7 @@
   els.toggleCam.addEventListener('click', () => { camOn = !camOn; applyLocalTrackState(); sendState(); });
   els.skipBtn.addEventListener('click', async () => { await cleanup('skipped'); await startMatching(); });
 
+  // overlay -> start matchmaking
   const dismissJoin = ()=>{ els.joinCta.style.display='none'; };
   els.joinCta.addEventListener('click', async ()=>{ dismissJoin(); await startMatching(); });
   els.joinCta.addEventListener('keydown', async (e)=>{ if (e.key==='Enter'||e.key===' ') { e.preventDefault(); dismissJoin(); await startMatching(); } });
@@ -290,12 +343,16 @@
   // presence bootstrap
   mm.subscribe(async (status)=>{ if (status==='SUBSCRIBED') await mm.track({ waiting:false, ts:Date.now() }); });
 
-  // get media early; plain controls
+  // get media early; set initial ribbons/indicators
   (async () => {
     try { await getMedia(); } catch { logSys('no camera/mic permission'); micOn=false; camOn=false; }
     applyLocalTrackState();
     updateRemoteState();
   })();
+
+  // header links are inert for now
+  document.getElementById('callLink').addEventListener('click', e => e.preventDefault());
+  document.getElementById('helpLink').addEventListener('click', e => e.preventDefault());
 })();
 </script>
 </body>
