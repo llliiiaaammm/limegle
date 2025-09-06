@@ -1,128 +1,117 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>limegle</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>limegle</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><text x="4" y="12">l</text></svg>'>
+<script src="/env.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+  :root { --header-h: 48px; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{display:flex;flex-direction:column;font-family:monospace;color:#000;background:#fff;overflow:hidden}
 
-  <!-- tiny favicon to avoid 404 -->
-  <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><text x="4" y="12">l</text></svg>'>
+  /* Header centered: call — limegle — help; id on right */
+  header{
+    height:var(--header-h);
+    display:grid;grid-template-columns:1fr auto 1fr;
+    align-items:center;padding:6px 8px;border-bottom:1px solid #000
+  }
+  header h1{grid-column:2;margin:0;font-size:22px;line-height:1}
+  header a{justify-self:center;color:#00f;text-decoration:underline;line-height:1}
+  .right-id{grid-column:3;justify-self:end;font-size:12px;line-height:1}
 
-  <!-- env + supabase -->
-  <script src="/env.js"></script>
-  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  /* Main layout */
+  main{height:calc(100vh - var(--header-h));display:grid;grid-template-columns:2fr 1fr;gap:8px;padding:8px}
+  @media (max-width:900px){ main{grid-template-columns:1fr} }
 
-  <style>
-    :root { --header-h: 44px; }
+  /* Videos column: two equal rows */
+  section.videos{display:grid;grid-template-rows:1fr 1fr;border-right:1px solid #000;min-height:0}
+  .box{position:relative;border-bottom:1px solid #000;display:flex;flex-direction:column;min-height:0}
+  .box:last-child{border-bottom:none}
 
-    /* minimal black & white layout */
-    html, body { height:100%; margin:0; }
-    body { display:flex; flex-direction:column; font-family:monospace; color:#000; background:#fff; overflow:hidden; }
+  /* Video letterbox logic:
+     - default: grey with loader (no stream)
+     - when stream attached -> .has-video => black bars */
+  video{flex:1;width:100%;height:100%;object-fit:contain;background:#ccc url('https://i.stack.imgur.com/kOnzy.gif') center/40px no-repeat}
+  video.has-video{background:#000}
 
-    /* centered header: call — limegle — help; user id right */
-    header {
-      height:var(--header-h);
-      display:grid;
-      grid-template-columns:1fr auto 1fr;
-      align-items:center;
-      padding:4px 8px;
-      border-bottom:1px solid #000;
-    }
-    header h1 { grid-column:2; margin:0; font-size:22px; }
-    header a { justify-self:center; color:#00f; text-decoration:underline; }
-    .right-id { grid-column:3; justify-self:end; font-size:12px; }
+  .label{position:absolute;left:4px;top:2px;font-size:12px;background:#fff;padding:0 2px}
+  .ribbon{position:absolute;left:4px;bottom:2px;font-size:12px;padding:0 2px}
 
-    /* main fills viewport below header; two columns (videos 2fr, chat 1fr) */
-    main {
-      height:calc(100vh - var(--header-h));
-      display:grid; grid-template-columns:2fr 1fr; gap:8px; padding:8px;
-    }
-    @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  /* Controls on right; remote indicators are spans */
+  .controls{position:absolute;right:4px;top:4px;display:flex;gap:6px;align-items:center}
+  .controls span{font-size:12px;pointer-events:none}
+  button{font-size:12px}
 
-    /* videos column: two equal rows, no cropping */
-    section.videos { display:grid; grid-template-rows:1fr 1fr; border-right:1px solid #000; min-height:0; }
-    .box { position:relative; border-bottom:1px solid #000; display:flex; flex-direction:column; min-height:0; }
-    .box:last-child { border-bottom:none; }
+  /* Chat column */
+  aside.chat{display:flex;flex-direction:column;min-height:0}
+  .chat-header{border-bottom:1px solid #000;padding:4px;font-weight:bold}
+  .chat-log{flex:1;overflow:auto;padding:4px;min-height:0}
+  .chat-input{display:flex;gap:6px;border-top:1px solid #000;padding:4px}
+  .chat-input input{flex:1;min-width:0}
+  .chat-input form, .chat-input{margin:0}
 
-    video {
-      flex:1; width:100%; height:100%;
-      object-fit:contain;                    /* no cut-off */
-      background:#ccc url('https://i.stack.imgur.com/kOnzy.gif') center/40px no-repeat; /* grey with loader */
-    }
-
-    .label { position:absolute; left:4px; top:2px; font-size:12px; background:#fff; }
-    .ribbon { position:absolute; left:4px; bottom:2px; font-size:12px; }
-
-    /* controls on right; remote indicators are spans (read-only) */
-    .controls { position:absolute; right:4px; top:4px; display:flex; gap:6px; align-items:center; }
-    .controls span { font-size:12px; pointer-events:none; }
-    button { font-size:12px; }
-
-    /* chat column uses full height; input pinned bottom; no extra space */
-    aside.chat { display:flex; flex-direction:column; min-height:0; }
-    .chat-header { border-bottom:1px solid #000; padding:4px; font-weight:bold; }
-    .chat-log { flex:1; overflow:auto; padding:4px; min-height:0; }
-    .chat-input { display:flex; gap:6px; border-top:1px solid #000; padding:4px; }
-    .chat-input input { flex:1; min-width:0; }
-
-    /* join overlay */
-    #joinCta { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.85); }
-    #joinCta .joinbox { border:1px solid #000; padding:16px 20px; background:#fff; cursor:pointer; text-align:center; }
-  </style>
+  /* Join overlay */
+  #joinCta{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.85)}
+  #joinCta .joinbox{border:1px solid #000;padding:16px 20px;background:#fff;cursor:pointer;text-align:center}
+</style>
 </head>
 <body>
-  <header>
-    <a href="#" id="callLink">call</a>
-    <h1>limegle</h1>
-    <a href="#" id="helpLink">help</a>
-    <div class="right-id">user id: <span id="userId">—</span></div>
-  </header>
+<header>
+  <a href="#" id="callLink">call</a>
+  <h1>limegle</h1>
+  <a href="#" id="helpLink">help</a>
+  <div class="right-id">user id: <span id="userId">—</span></div>
+</header>
 
-  <main>
-    <!-- videos -->
-    <section class="videos">
-      <!-- remote -->
-      <div class="box" id="remoteTile">
-        <span class="label">person</span>
-        <video id="remoteVideo" autoplay playsinline></video>
-        <div class="controls">
-          <span id="remoteMicInd"></span>
-          <span id="remoteCamInd"></span>
-          <button id="skipBtn" type="button">skip</button>
-        </div>
-        <div class="ribbon" id="remoteRibbon"></div>
+<main>
+  <!-- videos -->
+  <section class="videos">
+    <!-- remote -->
+    <div class="box" id="remoteTile">
+      <span class="label" id="remoteLabel">person</span>
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="controls">
+        <span id="remoteMicInd"></span>
+        <span id="remoteCamInd"></span>
+        <button id="skipBtn" type="button">skip</button>
       </div>
-
-      <!-- local -->
-      <div class="box" id="localTile">
-        <span class="label">you</span>
-        <video id="localVideo" autoplay playsinline muted></video>
-        <div class="controls">
-          <button id="toggleMic" type="button">mic</button>
-          <button id="toggleCam" type="button">cam</button>
-        </div>
-        <div class="ribbon" id="localRibbon"></div>
-      </div>
-    </section>
-
-    <!-- chat -->
-    <aside class="chat">
-      <div class="chat-header">text chat</div>
-      <div id="chatLog" class="chat-log"></div>
-      <form id="chatForm" class="chat-input" autocomplete="off">
-        <input id="chatText" placeholder="type a message..." />
-        <button type="submit">send</button>
-      </form>
-    </aside>
-  </main>
-
-  <!-- join overlay -->
-  <div id="joinCta" role="button" tabindex="0">
-    <div class="joinbox">
-      TAP TO JOIN PUBLIC CHAT
-      <div style="font-size:12px;margin-top:4px">press here to call</div>
+      <div class="ribbon" id="remoteRibbon"></div>
     </div>
+
+    <!-- local -->
+    <div class="box" id="localTile">
+      <span class="label" id="localLabel">you</span>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div class="controls">
+        <button id="toggleMic" type="button">mic</button>
+        <button id="toggleCam" type="button">cam</button>
+      </div>
+      <div class="ribbon" id="localRibbon"></div>
+    </div>
+  </section>
+
+  <!-- chat -->
+  <aside class="chat">
+    <div class="chat-header">text chat</div>
+    <div id="chatLog" class="chat-log"></div>
+    <form id="chatForm" class="chat-input" autocomplete="off">
+      <input id="chatText" placeholder="type a message..." />
+      <button type="submit">send</button>
+    </form>
+  </aside>
+</main>
+
+<!-- join overlay -->
+<div id="joinCta" role="button" tabindex="0">
+  <div class="joinbox">
+    TAP TO JOIN PUBLIC CHAT
+    <div style="font-size:12px;margin-top:4px">press here to call</div>
   </div>
+</div>
 
 <script>
 /* global supabase, ENV */
@@ -132,6 +121,8 @@
     userId: document.getElementById('userId'),
     remoteVideo: document.getElementById('remoteVideo'),
     localVideo: document.getElementById('localVideo'),
+    remoteLabel: document.getElementById('remoteLabel'),
+    localLabel: document.getElementById('localLabel'),
     remoteRibbon: document.getElementById('remoteRibbon'),
     remoteMicInd: document.getElementById('remoteMicInd'),
     remoteCamInd: document.getElementById('remoteCamInd'),
@@ -165,53 +156,68 @@
 
   const ICE_SERVERS = (ENV.ICE_SERVERS && ENV.ICE_SERVERS.length) ? ENV.ICE_SERVERS : [{ urls: 'stun:stun.l.google.com:19302' }];
 
-  // helpers
-  function pushMsg(type, who, text){
-    const row = document.createElement('div'); row.className = 'msg ' + type;
-    const a = document.createElement('div'); a.className = 'who'; a.textContent = who;
-    const b = document.createElement('div'); b.textContent = text;
-    row.appendChild(a); row.appendChild(b);
+  // chat helpers
+  function pushSystem(text){
+    const row = document.createElement('div');
+    row.textContent = text;  // no "system" label
     els.chatLog.appendChild(row);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
-  const logSys = t => pushMsg('system', 'system', t);
+  function pushUserLine(id, text){
+    const row = document.createElement('div');
+    row.textContent = `${id}: ${text}`;
+    els.chatLog.appendChild(row);
+    els.chatLog.scrollTop = els.chatLog.scrollHeight;
+  }
+  function clearChat(){ els.chatLog.textContent = ''; }
 
+  // labels: append state text
+  function labelWithState(name, mic, cam){
+    const bits = [];
+    if (mic === false) bits.push('muted');
+    if (cam === false) bits.push('camera off');
+    return bits.length ? `${name} (${bits.join(' and ')})` : name;
+  }
+  function updateLocalLabel(){
+    els.localLabel.textContent = labelWithState('you', micOn, camOn);
+    const bits = [];
+    if (!micOn) bits.push('mic off');
+    if (!camOn) bits.push('camera off');
+    els.localRibbon.textContent = bits.join(', ');
+  }
   function updateRemoteState(){
-    // build parts only for known values (no '?')
-    const parts = [];
-    if (remoteMicOn !== null) parts.push(`mic ${remoteMicOn ? 'on' : 'off'}`);
-    if (remoteCamOn !== null) parts.push(`camera ${remoteCamOn ? 'on' : 'off'}`);
-    els.remoteRibbon.textContent = parts.join(', ');
+    els.remoteLabel.textContent = labelWithState('person', remoteMicOn, remoteCamOn);
     els.remoteMicInd.textContent = (remoteMicOn === null) ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
     els.remoteCamInd.textContent = (remoteCamOn === null) ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
+    const parts = [];
+    if (remoteMicOn === false) parts.push('mic off');
+    if (remoteCamOn === false) parts.push('camera off');
+    els.remoteRibbon.textContent = parts.join(', ');
   }
 
+  // media
   async function getMedia(){
     if (localStream) return localStream;
     localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
     els.localVideo.srcObject = localStream;
+    els.localVideo.classList.add('has-video');  // black letterbox
     return localStream;
   }
-
   function applyLocalTrackState(){
     if (!localStream) return;
     const a = localStream.getAudioTracks()[0];
     const v = localStream.getVideoTracks()[0];
     if (a) a.enabled = !!micOn;
     if (v) v.enabled = !!camOn;
-    // local ribbon text
-    const bits = [];
-    if (!micOn) bits.push('mic off');
-    if (!camOn) bits.push('camera off');
-    document.getElementById('localRibbon').textContent = bits.join(', ');
+    updateLocalLabel();
   }
-
   function sendState(){
     if (dc && dc.readyState === 'open') {
       dc.send(JSON.stringify({ kind:'state', mic:!!micOn, cam:!!camOn }));
     }
   }
 
+  // webrtc
   function createPC(isCaller){
     pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
@@ -221,6 +227,7 @@
 
     pc.ontrack = (e) => {
       els.remoteVideo.srcObject = e.streams[0];
+      els.remoteVideo.classList.add('has-video'); // black bars
       remoteCamOn = true;
       updateRemoteState();
     };
@@ -239,18 +246,18 @@
   }
 
   function attachDC(){
-    dc.onopen = ()=>{ sendState(); logSys('connected'); };
+    dc.onopen = ()=>{ sendState(); pushSystem('connected'); };
     dc.onmessage = (e)=>{
       try{
         const msg = JSON.parse(e.data);
-        if (msg.kind === 'chat') pushMsg('peer','person',msg.text);
+        if (msg.kind === 'chat') pushUserLine(msg.from || 'person', msg.text);
         else if (msg.kind === 'state'){
           remoteMicOn = !!msg.mic;
           remoteCamOn = !!msg.cam;
           updateRemoteState();
         }
       }catch{
-        pushMsg('peer','person',String(e.data));
+        pushUserLine('person', String(e.data));
       }
     };
   }
@@ -269,7 +276,6 @@
 
   async function joinRoom(id, asCaller){
     if (room) return;
-    roomId = id;
     room = sb.channel(`limegle-room-${id}`, { config: { broadcast: { self:false } } });
 
     room.on('broadcast', { event:'signal' }, async ({ payload })=>{
@@ -291,14 +297,15 @@
     });
   }
 
-  async function cleanup(reason='left'){
+  async function cleanup(reason){
     try{ dc && dc.close(); }catch{} dc=null;
     try{ pc && pc.close(); }catch{} pc=null;
     try{ room && await room.unsubscribe(); }catch{} room=null;
     els.remoteVideo.srcObject = null;
+    els.remoteVideo.classList.remove('has-video'); // back to grey
     remoteMicOn = remoteCamOn = null;
     updateRemoteState();
-    if (reason) logSys(reason);
+    if (reason) pushSystem(reason);
   }
 
   async function pickPartner(){
@@ -314,11 +321,13 @@
   mm.on('broadcast', { event:'invite' }, async ({ payload })=>{
     if (payload.to !== uid || room) return;
     await mm.track({ waiting:false, ts:Date.now() });
+    clearChat();
     await joinRoom(payload.roomId, false);
   });
 
   async function startMatching(){
-    await cleanup('');
+    await cleanup();
+    clearChat();
     const partner = await pickPartner();
     if (partner){
       const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
@@ -327,13 +336,32 @@
       return;
     }
     await mm.track({ waiting:true, ts:Date.now() });
-    logSys('waiting for someone…');
+    pushSystem('waiting for someone…');
   }
 
-  // UI
+  // UI hooks
   els.toggleMic.addEventListener('click', () => { micOn = !micOn; applyLocalTrackState(); sendState(); });
   els.toggleCam.addEventListener('click', () => { camOn = !camOn; applyLocalTrackState(); sendState(); });
-  els.skipBtn.addEventListener('click', async () => { await cleanup('skipped'); await startMatching(); });
+  els.skipBtn.addEventListener('click', async () => {
+    if (!pc || pc.connectionState === 'new' || pc.connectionState === 'connecting' || (!els.remoteVideo.srcObject)) {
+      alert('no one is connected yet');
+      return;
+    }
+    await cleanup('skipped');
+    await startMatching();
+  });
+
+  // chat send (prefix with user id)
+  document.getElementById('chatForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const text = (els.chatText.value || '').trim();
+    if (!text) return;
+    pushUserLine(uid, text);
+    els.chatText.value = '';
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ kind:'chat', from: uid, text }));
+    }
+  });
 
   // overlay -> start matchmaking
   const dismissJoin = ()=>{ els.joinCta.style.display='none'; };
@@ -343,14 +371,14 @@
   // presence bootstrap
   mm.subscribe(async (status)=>{ if (status==='SUBSCRIBED') await mm.track({ waiting:false, ts:Date.now() }); });
 
-  // get media early; set initial ribbons/indicators
+  // get media early; set initial labels/indicators
   (async () => {
-    try { await getMedia(); } catch { logSys('no camera/mic permission'); micOn=false; camOn=false; }
+    try { await getMedia(); } catch { pushSystem('no camera/mic permission'); micOn=false; camOn=false; }
     applyLocalTrackState();
     updateRemoteState();
   })();
 
-  // header links are inert for now
+  // header links inert
   document.getElementById('callLink').addEventListener('click', e => e.preventDefault());
   document.getElementById('helpLink').addEventListener('click', e => e.preventDefault());
 })();
