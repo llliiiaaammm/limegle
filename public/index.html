@@ -162,56 +162,79 @@
   const uid = (() => {
     const k = 'limegle_uid';
     let v = localStorage.getItem(k);
-    if (!v) { v = (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0).toString(36).slice(-6); localStorage.setItem(k, v); }
+    if (!v) {
+      v = (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0)
+        .toString(36)
+        .slice(-6);
+      localStorage.setItem(k, v);
+    }
     return v;
   })();
   els.userId.textContent = uid;
 
   // supabase client
   const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
-  const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: true } } });
+  const mm = sb.channel('limegle-mm', {
+    config: { presence: { key: uid }, broadcast: { self: true } },
+  });
 
   // rtc state
-  let room = null, roomId = null;
-  let pc = null, dc = null, localStream = null;
-  let micOn = true, camOn = true;
-  let remoteMicOn = null, remoteCamOn = null;
+  let room = null,
+    roomId = null;
+  let pc = null,
+    dc = null,
+    localStream = null;
+  let micOn = true,
+    camOn = true;
+  let remoteMicOn = null,
+    remoteCamOn = null;
 
-  const ICE_SERVERS = (ENV.ICE_SERVERS && ENV.ICE_SERVERS.length) ? ENV.ICE_SERVERS : [{ urls: 'stun:stun.l.google.com:19302' }];
+  const ICE_SERVERS =
+    ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
+      ? ENV.ICE_SERVERS
+      : [{ urls: 'stun:stun.l.google.com:19302' }];
 
   // chat helpers
-  function pushSystem(text){
+  function pushSystem(text) {
     const row = document.createElement('div');
-    row.textContent = text;  // no "system" label
+    row.textContent = text; // no "system" label
     els.chatLog.appendChild(row);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
-  function pushUserLine(id, text){
+  function pushUserLine(id, text) {
     const row = document.createElement('div');
     row.textContent = `${id}: ${text}`;
     els.chatLog.appendChild(row);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
-  function clearChat(){ els.chatLog.textContent = ''; }
+  function clearChat() {
+    els.chatLog.textContent = '';
+  }
 
   // labels: append state text
-  function labelWithState(name, mic, cam){
+  function labelWithState(name, mic, cam) {
     const bits = [];
     if (mic === false) bits.push('muted');
     if (cam === false) bits.push('camera off');
     return bits.length ? `${name} (${bits.join(' and ')})` : name;
   }
-  function updateLocalLabel(){
+  function updateLocalLabel() {
     els.localLabel.textContent = labelWithState('you', micOn, camOn);
     const bits = [];
     if (!micOn) bits.push('mic off');
     if (!camOn) bits.push('camera off');
     els.localRibbon.textContent = bits.join(', ');
   }
-  function updateRemoteState(){
-    els.remoteLabel.textContent = labelWithState('person', remoteMicOn, remoteCamOn);
-    els.remoteMicInd.textContent = (remoteMicOn === null) ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
-    els.remoteCamInd.textContent = (remoteCamOn === null) ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
+  function updateRemoteState() {
+    els.remoteLabel.textContent = labelWithState(
+      'person',
+      remoteMicOn,
+      remoteCamOn,
+    );
+    els.remoteMicInd.textContent =
+      remoteMicOn === null ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
+    els.remoteCamInd.textContent =
+      remoteCamOn === null ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
     const parts = [];
     if (remoteMicOn === false) parts.push('mic off');
     if (remoteCamOn === false) parts.push('camera off');
@@ -219,14 +242,28 @@
   }
 
   // media
-  async function getMedia(){
-    if (localStream) return localStream;
-    localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
-    els.localVideo.srcObject = localStream;
-    els.localVideo.classList.add('has-video');  // black letterbox
+  async function safeGetMedia() {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+      els.localVideo.srcObject = localStream;
+      els.localVideo.classList.add('has-video'); // black letterbox
+      micOn = true;
+      camOn = true;
+    } catch (err) {
+      // denied -> force off
+      micOn = false;
+      camOn = false;
+      updateLocalLabel();
+      pushSystem(
+        'Camera/microphone are blocked in your browser settings. Enable them to use audio/video.',
+      );
+    }
     return localStream;
   }
-  function applyLocalTrackState(){
+  function applyLocalTrackState() {
     if (!localStream) return;
     const a = localStream.getAudioTracks()[0];
     const v = localStream.getVideoTracks()[0];
@@ -234,18 +271,23 @@
     if (v) v.enabled = !!camOn;
     updateLocalLabel();
   }
-  function sendState(){
+  function sendState() {
     if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ kind:'state', mic:!!micOn, cam:!!camOn }));
+      dc.send(JSON.stringify({ kind: 'state', mic: !!micOn, cam: !!camOn }));
     }
   }
 
   // webrtc
-  function createPC(isCaller){
+  function createPC(isCaller) {
     pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = (e) => {
-      if (e.candidate) room?.send({ type:'broadcast', event:'signal', payload:{ t:'candidate', c:e.candidate } });
+      if (e.candidate)
+        room?.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: { t: 'candidate', c: e.candidate },
+        });
     };
 
     pc.ontrack = (e) => {
@@ -257,61 +299,81 @@
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
-      if (s === 'failed' || s === 'disconnected' || s === 'closed') cleanup('connection ended');
+      if (s === 'failed' || s === 'disconnected' || s === 'closed')
+        cleanup('connection ended');
     };
 
-    if (isCaller){
+    if (isCaller) {
       dc = pc.createDataChannel('chat');
       attachDC();
     } else {
-      pc.ondatachannel = (e)=>{ dc = e.channel; attachDC(); };
+      pc.ondatachannel = (e) => {
+        dc = e.channel;
+        attachDC();
+      };
     }
   }
 
-  function attachDC(){
-    dc.onopen = ()=>{ sendState(); pushSystem('connected'); };
-    dc.onmessage = (e)=>{
-      try{
+  function attachDC() {
+    dc.onopen = () => {
+      sendState();
+      pushSystem('connected');
+    };
+    dc.onmessage = (e) => {
+      try {
         const msg = JSON.parse(e.data);
         if (msg.kind === 'chat') pushUserLine(msg.from || 'person', msg.text);
-        else if (msg.kind === 'state'){
+        else if (msg.kind === 'state') {
           remoteMicOn = !!msg.mic;
           remoteCamOn = !!msg.cam;
           updateRemoteState();
         }
-      }catch{
+      } catch {
         pushUserLine('person', String(e.data));
       }
     };
   }
 
-  async function startCallFlow(asCaller){
-    await getMedia();
+  async function startCallFlow(asCaller) {
+    await safeGetMedia();
+    if (!localStream) return; // permissions denied
     createPC(asCaller);
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
     applyLocalTrackState();
-    if (asCaller){
+    if (asCaller) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await room.send({ type:'broadcast', event:'signal', payload:{ t:'offer', sdp:offer } });
+      await room.send({
+        type: 'broadcast',
+        event: 'signal',
+        payload: { t: 'offer', sdp: offer },
+      });
     }
   }
 
-  async function joinRoom(id, asCaller){
+  async function joinRoom(id, asCaller) {
     if (room) return;
-    room = sb.channel(`limegle-room-${id}`, { config: { broadcast: { self:false } } });
+    room = sb.channel(`limegle-room-${id}`, {
+      config: { broadcast: { self: false } },
+    });
 
-    room.on('broadcast', { event:'signal' }, async ({ payload })=>{
+    room.on('broadcast', { event: 'signal' }, async ({ payload }) => {
       if (!pc) return;
-      if (payload.t === 'offer'){
+      if (payload.t === 'offer') {
         await pc.setRemoteDescription(payload.sdp);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        await room.send({ type:'broadcast', event:'signal', payload:{ t:'answer', sdp:answer } });
-      } else if (payload.t === 'answer'){
+        await room.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: { t: 'answer', sdp: answer },
+        });
+      } else if (payload.t === 'answer') {
         await pc.setRemoteDescription(payload.sdp);
-      } else if (payload.t === 'candidate' && payload.c){
-        try{ await pc.addIceCandidate(payload.c); }catch{}
+      } else if (payload.t === 'candidate' && payload.c) {
+        try {
+          await pc.addIceCandidate(payload.c);
+        } catch {}
       }
     });
 
@@ -320,10 +382,19 @@
     });
   }
 
-  async function cleanup(reason){
-    try{ dc && dc.close(); }catch{} dc=null;
-    try{ pc && pc.close(); }catch{} pc=null;
-    try{ room && await room.unsubscribe(); }catch{} room=null;
+  async function cleanup(reason) {
+    try {
+      dc && dc.close();
+    } catch {}
+    dc = null;
+    try {
+      pc && pc.close();
+    } catch {}
+    pc = null;
+    try {
+      room && (await room.unsubscribe());
+    } catch {}
+    room = null;
     els.remoteVideo.srcObject = null;
     els.remoteVideo.classList.remove('has-video'); // back to grey
     remoteMicOn = remoteCamOn = null;
@@ -331,42 +402,71 @@
     if (reason) pushSystem(reason);
   }
 
-  async function pickPartner(){
+  async function pickPartner() {
     const state = await mm.presenceState();
     const others = Object.entries(state).filter(([k]) => k !== uid);
     const waitingPeers = others
-      .map(([k,v]) => ({ id:k, metas:v }))
-      .filter(it => it.metas.some(m => m.metas?.waiting))
-      .sort((a,b) => (a.metas[0].metas.ts||0) - (b.metas[0].metas.ts||0));
+      .map(([k, v]) => ({ id: k, metas: v }))
+      .filter((it) => it.metas.some((m) => m.metas?.waiting))
+      .sort(
+        (a, b) => (a.metas[0].metas.ts || 0) - (b.metas[0].metas.ts || 0),
+      );
     return waitingPeers.length ? waitingPeers[0].id : null;
   }
 
-  mm.on('broadcast', { event:'invite' }, async ({ payload })=>{
+  mm.on('broadcast', { event: 'invite' }, async ({ payload }) => {
     if (payload.to !== uid || room) return;
-    await mm.track({ waiting:false, ts:Date.now() });
+    await mm.track({ waiting: false, ts: Date.now() });
     clearChat();
     await joinRoom(payload.roomId, false);
   });
 
-  async function startMatching(){
+  async function startMatching() {
     await cleanup();
     clearChat();
     const partner = await pickPartner();
-    if (partner){
+    if (partner) {
       const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-      await mm.send({ type:'broadcast', event:'invite', payload:{ to:partner, from:uid, roomId:id } });
+      await mm.send({
+        type: 'broadcast',
+        event: 'invite',
+        payload: { to: partner, from: uid, roomId: id },
+      });
       await joinRoom(id, true);
       return;
     }
-    await mm.track({ waiting:true, ts:Date.now() });
+    await mm.track({ waiting: true, ts: Date.now() });
     pushSystem('waiting for someone…');
   }
 
   // UI hooks
-  els.toggleMic.addEventListener('click', () => { micOn = !micOn; applyLocalTrackState(); sendState(); });
-  els.toggleCam.addEventListener('click', () => { camOn = !camOn; applyLocalTrackState(); sendState(); });
+  els.toggleMic.addEventListener('click', () => {
+    if (!localStream) {
+      alert('mic access is disabled in your browser. Enable permissions to use it.');
+      return;
+    }
+    micOn = !micOn;
+    applyLocalTrackState();
+    sendState();
+  });
+  els.toggleCam.addEventListener('click', () => {
+    if (!localStream) {
+      alert(
+        'camera access is disabled in your browser. Enable permissions to use it.',
+      );
+      return;
+    }
+    camOn = !camOn;
+    applyLocalTrackState();
+    sendState();
+  });
   els.skipBtn.addEventListener('click', async () => {
-    if (!pc || pc.connectionState === 'new' || pc.connectionState === 'connecting' || (!els.remoteVideo.srcObject)) {
+    if (
+      !pc ||
+      pc.connectionState === 'new' ||
+      pc.connectionState === 'connecting' ||
+      !els.remoteVideo.srcObject
+    ) {
       alert('no one is connected yet');
       return;
     }
@@ -374,36 +474,54 @@
     await startMatching();
   });
 
-  // chat send (prefix with user id)
-  document.getElementById('chatForm').addEventListener('submit', (e)=>{
+  // chat send
+  document.getElementById('chatForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const text = (els.chatText.value || '').trim();
     if (!text) return;
     pushUserLine(uid, text);
     els.chatText.value = '';
     if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ kind:'chat', from: uid, text }));
+      dc.send(JSON.stringify({ kind: 'chat', from: uid, text }));
     }
   });
 
   // overlay -> start matchmaking
-  const dismissJoin = ()=>{ els.joinCta.style.display='none'; };
-  els.joinCta.addEventListener('click', async ()=>{ dismissJoin(); await startMatching(); });
-  els.joinCta.addEventListener('keydown', async (e)=>{ if (e.key==='Enter'||e.key===' ') { e.preventDefault(); dismissJoin(); await startMatching(); } });
+  const dismissJoin = () => {
+    els.joinCta.style.display = 'none';
+  };
+  els.joinCta.addEventListener('click', async () => {
+    dismissJoin();
+    await startMatching();
+  });
+  els.joinCta.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      dismissJoin();
+      await startMatching();
+    }
+  });
 
   // presence bootstrap
-  mm.subscribe(async (status)=>{ if (status==='SUBSCRIBED') await mm.track({ waiting:false, ts:Date.now() }); });
+  mm.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED')
+      await mm.track({ waiting: false, ts: Date.now() });
+  });
 
-  // get media early; set initial labels/indicators
+  // init media early
   (async () => {
-    try { await getMedia(); } catch { pushSystem('no camera/mic permission'); micOn=false; camOn=false; }
+    await safeGetMedia();
     applyLocalTrackState();
     updateRemoteState();
   })();
 
   // header links inert
-  document.getElementById('callLink').addEventListener('click', e => e.preventDefault());
-  document.getElementById('helpLink').addEventListener('click', e => e.preventDefault());
+  document.getElementById('callLink').addEventListener('click', (e) =>
+    e.preventDefault(),
+  );
+  document.getElementById('helpLink').addEventListener('click', (e) =>
+    e.preventDefault(),
+  );
 })();
 </script>
 </body>
