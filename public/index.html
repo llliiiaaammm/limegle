@@ -402,16 +402,29 @@
     if (reason) pushSystem(reason);
   }
 
+  // FIX: correct presence parsing + sorting
   async function pickPartner() {
     const state = await mm.presenceState();
     const others = Object.entries(state).filter(([k]) => k !== uid);
     const waitingPeers = others
-      .map(([k, v]) => ({ id: k, metas: v }))
-      .filter((it) => it.metas.some((m) => m.metas?.waiting))
-      .sort(
-        (a, b) => (a.metas[0].metas.ts || 0) - (b.metas[0].metas.ts || 0),
-      );
+      .map(([k, v]) => ({ id: k, metas: v.metas || v }))
+      .filter((it) => it.metas.some((m) => m.waiting))
+      .sort((a, b) => (a.metas[0].ts || 0) - (b.metas[0].ts || 0));
     return waitingPeers.length ? waitingPeers[0].id : null;
+  }
+
+  // FIX: retry invite when presence list changes (breaks the "both waiting" stalemate)
+  async function tryInviteIfWaiting() {
+    if (room) return; // already in a room
+    const partner = await pickPartner();
+    if (!partner) return;
+    const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    await mm.send({
+      type: 'broadcast',
+      event: 'invite',
+      payload: { to: partner, from: uid, roomId: id },
+    });
+    await joinRoom(id, true);
   }
 
   mm.on('broadcast', { event: 'invite' }, async ({ payload }) => {
@@ -504,8 +517,10 @@
 
   // presence bootstrap
   mm.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED')
+    if (status === 'SUBSCRIBED') {
       await mm.track({ waiting: false, ts: Date.now() });
+      mm.on('presence', { event: 'sync' }, tryInviteIfWaiting); // <-- new: react to presence changes
+    }
   });
 
   // init media early
