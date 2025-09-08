@@ -257,9 +257,7 @@
       micOn = false;
       camOn = false;
       updateLocalLabel();
-      pushSystem(
-        'it looks like your camera/video is blocked.',
-      );
+      pushSystem('it looks like your camera/video is blocked.');
     }
     return localStream;
   }
@@ -293,6 +291,9 @@
     pc.ontrack = (e) => {
       els.remoteVideo.srcObject = e.streams[0];
       els.remoteVideo.classList.add('has-video'); // black bars
+      // NEW: make remote playback reliable on mobile
+      els.remoteVideo.muted = true;
+      Promise.resolve(els.remoteVideo.play()).catch(() => {});
       remoteCamOn = true;
       updateRemoteState();
     };
@@ -334,12 +335,14 @@
     };
   }
 
+  // CHANGED: proceed even if media is blocked (still create PC and negotiate)
   async function startCallFlow(asCaller) {
-    await safeGetMedia();
-    if (!localStream) return; // permissions denied
-    createPC(asCaller);
-    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
-    applyLocalTrackState();
+    await safeGetMedia();                 // may fail on phone; that's OK
+    createPC(asCaller);                   // <-- always create the PC
+    if (localStream) {
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+      applyLocalTrackState();
+    }
     if (asCaller) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -423,7 +426,6 @@
 
     // If we're already in a room, tie-break:
     if (room) {
-      // If inviter has higher priority, yield: tear down and join them.
       if (String(payload.from) > String(uid)) {
         await cleanup();
         clearChat();
@@ -451,7 +453,6 @@
         });
         await joinRoom(id, true);
       } else {
-        // Let the other side invite; mark as waiting.
         await mm.track({ waiting: true, ts: Date.now() });
         pushSystem('waiting for someone…');
       }
