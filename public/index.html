@@ -188,6 +188,8 @@
     camOn = true;
   let remoteMicOn = null,
     remoteCamOn = null;
+  let peerReady = false;
+  let sentOffer = false;
 
   const ICE_SERVERS =
     ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
@@ -335,22 +337,19 @@
     };
   }
 
-  // CHANGED: proceed even if media is blocked (still create PC and negotiate)
-  async function startCallFlow(asCaller) {
-    await safeGetMedia();                 // may fail on phone; that's OK
-    createPC(asCaller);                   // <-- always create the PC
+   async function startCallFlow(asCaller) {
+    await safeGetMedia();
+    createPC(asCaller);
     if (localStream) {
       localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
       applyLocalTrackState();
     }
-    if (asCaller) {
+    // don't send offer here; wait for 'ready'
+    if (asCaller && peerReady && !sentOffer) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await room.send({
-        type: 'broadcast',
-        event: 'signal',
-        payload: { t: 'offer', sdp: offer },
-      });
+      await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'offer', sdp: offer }});
+      sentOffer = true;
     }
   }
 
@@ -377,11 +376,20 @@
         try {
           await pc.addIceCandidate(payload.c);
         } catch {}
+      } else if (payload.t === 'ready') {
+        peerReady = true;
+        if (asCaller && pc && !sentOffer) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'offer', sdp: offer }});
+          sentOffer = true;
+        }
       }
     });
 
     await room.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') await startCallFlow(asCaller);
+      await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'ready' }});
     });
   }
 
@@ -401,6 +409,8 @@
     els.remoteVideo.srcObject = null;
     els.remoteVideo.classList.remove('has-video'); // back to grey
     remoteMicOn = remoteCamOn = null;
+    peerReady = false;
+    sentOffer = false;
     updateRemoteState();
     if (reason) pushSystem(reason);
   }
