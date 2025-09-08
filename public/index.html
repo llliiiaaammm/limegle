@@ -416,6 +416,21 @@
     return waitingPeers.length ? waitingPeers[0].id : null;
   }
 
+  async function onPresenceSync() {
+    if (room) return;
+    const partner = await pickPartner();
+    if (!partner) return;
+    if (shouldInvite(uid, partner)) {
+      const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+      await mm.send({
+        type: 'broadcast',
+        event: 'invite',
+        payload: { to: partner, from: uid, roomId: id },
+      });
+      await joinRoom(id, true);
+    }
+  }
+
   // deterministic inviter: higher uid invites; lower uid waits/answers.
   function shouldInvite(me, partner) {
     return String(me) > String(partner);
@@ -530,6 +545,8 @@
     if (status === 'SUBSCRIBED')
       await mm.track({ waiting: false, ts: Date.now() });
   });
+
+  mm.on('presence', { event: 'sync' }, onPresenceSync);
 
   // init media early
   (async () => {
