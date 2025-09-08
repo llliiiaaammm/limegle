@@ -402,7 +402,7 @@
     if (reason) pushSystem(reason);
   }
 
-  // FIX: correct presence parsing + sorting
+  // correct presence parsing + sorting
   async function pickPartner() {
     const state = await mm.presenceState();
     const others = Object.entries(state).filter(([k]) => k !== uid);
@@ -413,22 +413,25 @@
     return waitingPeers.length ? waitingPeers[0].id : null;
   }
 
-  // FIX: retry invite when presence list changes (breaks the "both waiting" stalemate)
-  async function tryInviteIfWaiting() {
-    if (room) return; // already in a room
-    const partner = await pickPartner();
-    if (!partner) return;
-    const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-    await mm.send({
-      type: 'broadcast',
-      event: 'invite',
-      payload: { to: partner, from: uid, roomId: id },
-    });
-    await joinRoom(id, true);
+  // deterministic inviter: higher uid invites; lower uid waits/answers.
+  function shouldInvite(me, partner) {
+    return String(me) > String(partner);
   }
 
   mm.on('broadcast', { event: 'invite' }, async ({ payload }) => {
-    if (payload.to !== uid || room) return;
+    if (payload.to !== uid) return;
+
+    // If we're already in a room, tie-break:
+    if (room) {
+      // If inviter has higher priority, yield: tear down and join them.
+      if (String(payload.from) > String(uid)) {
+        await cleanup();
+        clearChat();
+        await joinRoom(payload.roomId, false);
+      }
+      return;
+    }
+
     await mm.track({ waiting: false, ts: Date.now() });
     clearChat();
     await joinRoom(payload.roomId, false);
@@ -439,13 +442,19 @@
     clearChat();
     const partner = await pickPartner();
     if (partner) {
-      const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-      await mm.send({
-        type: 'broadcast',
-        event: 'invite',
-        payload: { to: partner, from: uid, roomId: id },
-      });
-      await joinRoom(id, true);
+      if (shouldInvite(uid, partner)) {
+        const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+        await mm.send({
+          type: 'broadcast',
+          event: 'invite',
+          payload: { to: partner, from: uid, roomId: id },
+        });
+        await joinRoom(id, true);
+      } else {
+        // Let the other side invite; mark as waiting.
+        await mm.track({ waiting: true, ts: Date.now() });
+        pushSystem('waiting for someone…');
+      }
       return;
     }
     await mm.track({ waiting: true, ts: Date.now() });
@@ -517,10 +526,8 @@
 
   // presence bootstrap
   mm.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED') {
+    if (status === 'SUBSCRIBED')
       await mm.track({ waiting: false, ts: Date.now() });
-      mm.on('presence', { event: 'sync' }, tryInviteIfWaiting); // <-- new: react to presence changes
-    }
   });
 
   // init media early
