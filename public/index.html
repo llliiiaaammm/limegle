@@ -174,9 +174,7 @@
 
   // supabase client
   const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
-  const mm = sb.channel('limegle-mm', {
-    config: { presence: { key: uid }, broadcast: { self: true } },
-  });
+  const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: false } } });
 
   // rtc state
   let room = null,
@@ -437,6 +435,7 @@
         event: 'invite',
         payload: { to: partner, from: uid, roomId: id },
       });
+      await mm.track({ waiting: false, ts: Date.now() });
       await joinRoom(id, true);
     }
   }
@@ -476,6 +475,7 @@
           event: 'invite',
           payload: { to: partner, from: uid, roomId: id },
         });
+        await mm.track({ waiting: false, ts: Date.now() });
         await joinRoom(id, true);
       } else {
         await mm.track({ waiting: true, ts: Date.now() });
