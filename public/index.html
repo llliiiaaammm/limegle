@@ -175,6 +175,7 @@
   // supabase client
   const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
   const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: false } } });
+  mm.on('presence', { event: 'sync' }, onPresenceSync);
 
   // rtc state
   let room = null,
@@ -552,11 +553,11 @@
 
   // presence bootstrap
   mm.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED')
-      await mm.track({ waiting: false, ts: Date.now() });
+   if (status === 'SUBSCRIBED') {
+     await mm.track({ waiting: false, ts: Date.now() });
+     await onPresenceSync(); // in case a partner is already waiting
+   }
   });
-
-  mm.on('presence', { event: 'sync' }, onPresenceSync);
 
   // init media early
   (async () => {
