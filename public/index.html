@@ -187,8 +187,7 @@
     camOn = true;
   let remoteMicOn = null,
     remoteCamOn = null;
-  let peerReady = false;
-  let sentOffer = false;
+  let peerReady = false, sentOffer = false, userInteracted = false;
 
   const ICE_SERVERS =
     ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
@@ -292,9 +291,14 @@
     pc.ontrack = (e) => {
       els.remoteVideo.srcObject = e.streams[0];
       els.remoteVideo.classList.add('has-video'); // black bars
-      // NEW: make remote playback reliable on mobile
-      els.remoteVideo.muted = true;
+      // start muted only if we don't yet have a user gesture
+      els.remoteVideo.muted = !userInteracted;
       Promise.resolve(els.remoteVideo.play()).catch(() => {});
+      // after a gesture, allow sound
+      if (userInteracted) {
+        els.remoteVideo.muted = false;
+        Promise.resolve(els.remoteVideo.play()).catch(() => {});
+      }
       remoteCamOn = true;
       updateRemoteState();
     };
@@ -538,6 +542,12 @@
   // overlay -> start matchmaking
   const dismissJoin = () => {
     els.joinCta.style.display = 'none';
+    userInteracted = true;
+    // if a remote stream is already attached, unmute now
+    if (els.remoteVideo.srcObject) {
+      els.remoteVideo.muted = false;
+      Promise.resolve(els.remoteVideo.play()).catch(() => {});
+    }
   };
   els.joinCta.addEventListener('click', async () => {
     dismissJoin();
