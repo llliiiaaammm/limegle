@@ -176,6 +176,8 @@
   const sb = supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
   const mm = sb.channel('limegle-mm', { config: { presence: { key: uid }, broadcast: { self: false } } });
   mm.on('presence', { event: 'sync' }, onPresenceSync);
+  mm.on('presence', { event: 'join' }, onPresenceSync);
+  mm.on('presence', { event: 'leave' }, onPresenceSync);
 
   // rtc state
   let room = null,
@@ -188,6 +190,7 @@
   let remoteMicOn = null,
     remoteCamOn = null;
   let peerReady = false, sentOffer = false, userInteracted = false;
+  let peerId = null, didRestartIce = false, wasSkipped = false, iSkipped = false, retryTimer = null;
 
   const ICE_SERVERS =
     ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
@@ -245,8 +248,8 @@
   async function safeGetMedia() {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } },
       });
       els.localVideo.srcObject = localStream;
       els.localVideo.classList.add('has-video'); // black letterbox
@@ -305,8 +308,14 @@
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
+      if (s === 'failed' && !didRestartIce) {
+        didRestartIce = true;
+        try { pc.restartIce(); } catch {}
+        return;
+      }
       if (s === 'failed' || s === 'disconnected' || s === 'closed')
-        cleanup('connection ended');
+        cleanup(); // reason decided in cleanup
+ };
     };
 
     if (isCaller) {
@@ -323,11 +332,17 @@
   function attachDC() {
     dc.onopen = () => {
       sendState();
-      pushSystem('connected');
+      pushSystem(`connected with ${peerId || 'person'}`);
     };
     dc.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+        if (msg.kind === 'ctrl' && msg.op === 'skip') {
+          wasSkipped = true;
+          pushSystem('you just got skipped');
+          cleanup();
+          return;
+        }
         if (msg.kind === 'chat') pushUserLine(msg.from || 'person', msg.text);
         else if (msg.kind === 'state') {
           remoteMicOn = !!msg.mic;
@@ -360,6 +375,14 @@
     if (room) return;
     room = sb.channel(`limegle-room-${id}`, {
       config: { broadcast: { self: false } },
+    });
+
+    room.on('broadcast', { event: 'control' }, ({ payload }) => {
+      if (payload.t === 'skip') {
+        wasSkipped = true;
+        pushSystem('you just got skipped');
+        cleanup(); // no extra reason; message already shown
+      }
     });
 
     room.on('broadcast', { event: 'signal' }, async ({ payload }) => {
@@ -414,8 +437,15 @@
     remoteMicOn = remoteCamOn = null;
     peerReady = false;
     sentOffer = false;
+    didRestartIce = false;
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+    // only show a default loss message if we weren't explicitly skipped
+    if (!wasSkipped && !iSkipped && !reason) reason = 'connection lost';
     updateRemoteState();
     if (reason) pushSystem(reason);
+    wasSkipped = false;
+    iSkipped = false;
+    peerId = null;
   }
 
   // correct presence parsing + sorting
@@ -434,6 +464,7 @@
     const partner = await pickPartner();
     if (!partner) return;
     if (shouldInvite(uid, partner)) {
+      peerId = partner;
       const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
       await mm.send({
         type: 'broadcast',
@@ -452,7 +483,8 @@
 
   mm.on('broadcast', { event: 'invite' }, async ({ payload }) => {
     if (payload.to !== uid) return;
-
+    peerId = payload.from;
+    
     // If we're already in a room, tie-break:
     if (room) {
       if (String(payload.from) > String(uid)) {
@@ -485,11 +517,13 @@
       } else {
         await mm.track({ waiting: true, ts: Date.now() });
         pushSystem('waiting for someone…');
+        if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1500);
       }
       return;
     }
     await mm.track({ waiting: true, ts: Date.now() });
     pushSystem('waiting for someone…');
+    if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1500);
   }
 
   // UI hooks
@@ -523,9 +557,18 @@
       alert('no one is connected yet');
       return;
     }
-    await cleanup('skipped');
-    await startMatching();
-  });
+    iSkipped = true;
+    try {
+      if (room) {
+        await room.send({ type: 'broadcast', event: 'control', payload: { t: 'skip', from: uid, to: peerId } });
+      }
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ kind: 'ctrl', op: 'skip' }));
+      }
+    } catch {}
+      await cleanup('skipped');
+      await startMatching();
+    });
 
   // chat send
   document.getElementById('chatForm').addEventListener('submit', (e) => {
