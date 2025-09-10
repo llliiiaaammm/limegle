@@ -180,17 +180,13 @@
   mm.on('presence', { event: 'leave' }, onPresenceSync);
 
   // rtc state
-  let room = null,
-    roomId = null;
-  let pc = null,
-    dc = null,
-    localStream = null;
-  let micOn = true,
-    camOn = true;
-  let remoteMicOn = null,
-    remoteCamOn = null;
+  let room = null, roomId = null;
+  let pc = null, dc = null, localStream = null;
+  let micOn = true, camOn = true;
+  let remoteMicOn = null, remoteCamOn = null;
   let peerReady = false, sentOffer = false, userInteracted = false;
   let peerId = null, didRestartIce = false, wasSkipped = false, iSkipped = false, retryTimer = null;
+  let handshakeTimer = null; // NEW
 
   const ICE_SERVERS =
     ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
@@ -200,7 +196,7 @@
   // chat helpers
   function pushSystem(text) {
     const row = document.createElement('div');
-    row.textContent = text; // no "system" label
+    row.textContent = text;
     els.chatLog.appendChild(row);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
@@ -214,7 +210,7 @@
     els.chatLog.textContent = '';
   }
 
-  // labels: append state text
+  // labels
   function labelWithState(name, mic, cam) {
     const bits = [];
     if (mic === false) bits.push('muted');
@@ -229,11 +225,7 @@
     els.localRibbon.textContent = bits.join(', ');
   }
   function updateRemoteState() {
-    els.remoteLabel.textContent = labelWithState(
-      'person',
-      remoteMicOn,
-      remoteCamOn,
-    );
+    els.remoteLabel.textContent = labelWithState('person', remoteMicOn, remoteCamOn);
     els.remoteMicInd.textContent =
       remoteMicOn === null ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
     els.remoteCamInd.textContent =
@@ -252,13 +244,10 @@
         video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } },
       });
       els.localVideo.srcObject = localStream;
-      els.localVideo.classList.add('has-video'); // black letterbox
-      micOn = true;
-      camOn = true;
+      els.localVideo.classList.add('has-video');
+      micOn = true; camOn = true;
     } catch (err) {
-      // denied -> force off
-      micOn = false;
-      camOn = false;
+      micOn = false; camOn = false;
       updateLocalLabel();
       pushSystem('it looks like your camera/video is blocked.');
     }
@@ -284,20 +273,23 @@
 
     pc.onicecandidate = (e) => {
       if (e.candidate)
-        room?.send({
-          type: 'broadcast',
-          event: 'signal',
-          payload: { t: 'candidate', c: e.candidate },
-        });
+        room?.send({ type: 'broadcast', event: 'signal', payload: { t: 'candidate', c: e.candidate } });
+    };
+
+    pc.ontrack = () => {
+      // Use first stream (unified-plan)
+      const recvStream = pc.getReceivers().find(r => r.track && r.track.kind === 'video')?.track?.kind
+        ? null : null;
+      // Attach the stream delivered by ontrack event
+      // (most browsers send it in e.streams[0], but we already set it below)
     };
 
     pc.ontrack = (e) => {
       els.remoteVideo.srcObject = e.streams[0];
-      els.remoteVideo.classList.add('has-video'); // black bars
-      // start muted only if we don't yet have a user gesture
+      els.remoteVideo.classList.add('has-video');
+      // autoplay policy: unmute only after user gesture
       els.remoteVideo.muted = !userInteracted;
       Promise.resolve(els.remoteVideo.play()).catch(() => {});
-      // after a gesture, allow sound
       if (userInteracted) {
         els.remoteVideo.muted = false;
         Promise.resolve(els.remoteVideo.play()).catch(() => {});
@@ -306,15 +298,23 @@
       updateRemoteState();
     };
 
-    pc.onconnectionstatechange = () => {
+    pc.onconnectionstatechange = async () => {
       const s = pc.connectionState;
       if (s === 'failed' && !didRestartIce) {
         didRestartIce = true;
         try { pc.restartIce(); } catch {}
+        // If we were the caller, push a fresh ICE-restart offer
+        try {
+          if (isCaller) {
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            await room?.send({ type: 'broadcast', event: 'signal', payload: { t: 'offer', sdp: offer } });
+          }
+        } catch {}
         return;
       }
       if (s === 'failed' || s === 'disconnected' || s === 'closed') {
-        cleanup(); // reason decided in cleanup
+        cleanup(); // reason decided inside cleanup()
       }
     };
 
@@ -331,6 +331,7 @@
 
   function attachDC() {
     dc.onopen = () => {
+      if (handshakeTimer) { clearTimeout(handshakeTimer); handshakeTimer = null; } // NEW
       sendState();
       pushSystem(`connected with ${peerId || 'person'}`);
     };
@@ -340,7 +341,7 @@
         if (msg.kind === 'ctrl' && msg.op === 'skip') {
           wasSkipped = true;
           pushSystem('you just got skipped');
-          cleanup();
+          cleanup('skipped'); // NEW: explicit reason
           return;
         }
         if (msg.kind === 'chat') pushUserLine(msg.from || 'person', msg.text);
@@ -355,12 +356,26 @@
     };
   }
 
-   async function startCallFlow(asCaller) {
+  async function startCallFlow(asCaller) {
     await safeGetMedia();
     createPC(asCaller);
     if (localStream) {
       localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
       applyLocalTrackState();
+
+      // NEW: tame bandwidth to reduce lag (no TURN needed)
+      const vs = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (vs) {
+        const p = vs.getParameters();
+        p.encodings = [{ maxBitrate: 300_000, maxFramerate: 24 }];
+        try { await vs.setParameters(p); } catch {}
+      }
+      const as = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+      if (as) {
+        const p = as.getParameters();
+        p.encodings = [{ maxBitrate: 32_000 }];
+        try { await as.setParameters(p); } catch {}
+      }
     }
     // don't send offer here; wait for 'ready'
     if (asCaller && peerReady && !sentOffer) {
@@ -373,15 +388,13 @@
 
   async function joinRoom(id, asCaller) {
     if (room) return;
-    room = sb.channel(`limegle-room-${id}`, {
-      config: { broadcast: { self: false } },
-    });
+    room = sb.channel(`limegle-room-${id}`, { config: { broadcast: { self: false } } });
 
     room.on('broadcast', { event: 'control' }, ({ payload }) => {
       if (payload.t === 'skip') {
         wasSkipped = true;
         pushSystem('you just got skipped');
-        cleanup(); // no extra reason; message already shown
+        cleanup('skipped'); // NEW
       }
     });
 
@@ -391,17 +404,11 @@
         await pc.setRemoteDescription(payload.sdp);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        await room.send({
-          type: 'broadcast',
-          event: 'signal',
-          payload: { t: 'answer', sdp: answer },
-        });
+        await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'answer', sdp: answer } });
       } else if (payload.t === 'answer') {
         await pc.setRemoteDescription(payload.sdp);
       } else if (payload.t === 'candidate' && payload.c) {
-        try {
-          await pc.addIceCandidate(payload.c);
-        } catch {}
+        try { await pc.addIceCandidate(payload.c); } catch {}
       } else if (payload.t === 'ready') {
         peerReady = true;
         if (asCaller && pc && !sentOffer) {
@@ -414,32 +421,37 @@
     });
 
     await room.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') await startCallFlow(asCaller);
+      if (status === 'SUBSCRIBED') {
+        await startCallFlow(asCaller);
+        // NEW: handshake timeout—if DC never opens, rematch
+        handshakeTimer = setTimeout(() => {
+          if (!dc || dc.readyState !== 'open') {
+            cleanup('connection timed out');
+            startMatching();
+          }
+        }, 8000);
+      }
       await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'ready' }});
     });
   }
 
   async function cleanup(reason) {
-    try {
-      dc && dc.close();
-    } catch {}
+    try { dc && dc.close(); } catch {}
     dc = null;
-    try {
-      pc && pc.close();
-    } catch {}
+    try { pc && pc.close(); } catch {}
     pc = null;
-    try {
-      room && (await room.unsubscribe());
-    } catch {}
+    try { room && (await room.unsubscribe()); } catch {}
     room = null;
+
     els.remoteVideo.srcObject = null;
-    els.remoteVideo.classList.remove('has-video'); // back to grey
+    els.remoteVideo.classList.remove('has-video');
     remoteMicOn = remoteCamOn = null;
     peerReady = false;
     sentOffer = false;
     didRestartIce = false;
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-    // only show a default loss message if we weren't explicitly skipped
+    if (handshakeTimer) { clearTimeout(handshakeTimer); handshakeTimer = null; } // NEW
+
     if (!wasSkipped && !iSkipped && !reason) reason = 'connection lost';
     updateRemoteState();
     if (reason) pushSystem(reason);
@@ -448,7 +460,7 @@
     peerId = null;
   }
 
-  // correct presence parsing + sorting
+  // presence matching
   async function pickPartner() {
     const state = await mm.presenceState();
     const others = Object.entries(state).filter(([k]) => k !== uid);
@@ -466,17 +478,13 @@
     if (shouldInvite(uid, partner)) {
       peerId = partner;
       const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-      await mm.send({
-        type: 'broadcast',
-        event: 'invite',
-        payload: { to: partner, from: uid, roomId: id },
-      });
+      await mm.send({ type: 'broadcast', event: 'invite', payload: { to: partner, from: uid, roomId: id } });
       await mm.track({ waiting: false, ts: Date.now() });
+      clearChat(); // NEW: fresh chat when you invite
       await joinRoom(id, true);
     }
   }
 
-  // deterministic inviter: higher uid invites; lower uid waits/answers.
   function shouldInvite(me, partner) {
     return String(me) > String(partner);
   }
@@ -484,8 +492,7 @@
   mm.on('broadcast', { event: 'invite' }, async ({ payload }) => {
     if (payload.to !== uid) return;
     peerId = payload.from;
-    
-    // If we're already in a room, tie-break:
+
     if (room) {
       if (String(payload.from) > String(uid)) {
         await cleanup();
@@ -507,12 +514,9 @@
     if (partner) {
       if (shouldInvite(uid, partner)) {
         const id = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-        await mm.send({
-          type: 'broadcast',
-          event: 'invite',
-          payload: { to: partner, from: uid, roomId: id },
-        });
+        await mm.send({ type: 'broadcast', event: 'invite', payload: { to: partner, from: uid, roomId: id } });
         await mm.track({ waiting: false, ts: Date.now() });
+        clearChat(); // inviter path as well
         await joinRoom(id, true);
       } else {
         await mm.track({ waiting: true, ts: Date.now() });
@@ -538,9 +542,7 @@
   });
   els.toggleCam.addEventListener('click', () => {
     if (!localStream) {
-      alert(
-        'camera access is disabled in your browser. Enable permissions to use it.',
-      );
+      alert('camera access is disabled in your browser. Enable permissions to use it.');
       return;
     }
     camOn = !camOn;
@@ -548,12 +550,7 @@
     sendState();
   });
   els.skipBtn.addEventListener('click', async () => {
-    if (
-      !pc ||
-      pc.connectionState === 'new' ||
-      pc.connectionState === 'connecting' ||
-      !els.remoteVideo.srcObject
-    ) {
+    if (!pc || pc.connectionState === 'new' || pc.connectionState === 'connecting' || !els.remoteVideo.srcObject) {
       alert('no one is connected yet');
       return;
     }
@@ -566,11 +563,10 @@
         dc.send(JSON.stringify({ kind: 'ctrl', op: 'skip' }));
       }
     } catch {}
-      await cleanup('skipped');
-      await startMatching();
-    });
+    await cleanup('skipped');
+    await startMatching();
+  });
 
-  // chat send
   document.getElementById('chatForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const text = (els.chatText.value || '').trim();
@@ -582,11 +578,10 @@
     }
   });
 
-  // overlay -> start matchmaking
+  // overlay -> start
   const dismissJoin = () => {
     els.joinCta.style.display = 'none';
     userInteracted = true;
-    // if a remote stream is already attached, unmute now
     if (els.remoteVideo.srcObject) {
       els.remoteVideo.muted = false;
       Promise.resolve(els.remoteVideo.play()).catch(() => {});
@@ -606,10 +601,10 @@
 
   // presence bootstrap
   mm.subscribe(async (status) => {
-   if (status === 'SUBSCRIBED') {
-     await mm.track({ waiting: false, ts: Date.now() });
-     await onPresenceSync(); // in case a partner is already waiting
-   }
+    if (status === 'SUBSCRIBED') {
+      await mm.track({ waiting: false, ts: Date.now() });
+      await onPresenceSync();
+    }
   });
 
   // init media early
@@ -620,12 +615,8 @@
   })();
 
   // header links inert
-  document.getElementById('callLink').addEventListener('click', (e) =>
-    e.preventDefault(),
-  );
-  document.getElementById('helpLink').addEventListener('click', (e) =>
-    e.preventDefault(),
-  );
+  document.getElementById('callLink').addEventListener('click', (e) => e.preventDefault());
+  document.getElementById('helpLink').addEventListener('click', (e) => e.preventDefault());
 })();
 </script>
 </body>
