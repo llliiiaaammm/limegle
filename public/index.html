@@ -313,9 +313,9 @@
         try { pc.restartIce(); } catch {}
         return;
       }
-      if (s === 'failed' || s === 'disconnected' || s === 'closed')
+      if (s === 'failed' || s === 'disconnected' || s === 'closed') {
         cleanup(); // reason decided in cleanup
- };
+      }
     };
 
     if (isCaller) {
