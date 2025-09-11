@@ -77,6 +77,28 @@
   .center-group h1{ margin:0; font-size:22px; line-height:1; }
   .center-group a{ color:#00f; text-decoration:underline; line-height:1; }
   .right-id{ grid-column:3; justify-self:end; font-size:12px; line-height:1; }
+
+
+
+  /* Make room for a second row in the header */
+  :root { --header-h: 68px; } /* was 48px */
+  
+  /* Header now has two rows: main row + disclaimer row */
+  header { grid-template-rows: auto auto; }
+  
+  /* Disclaimer style */
+  .disclaimer{
+    grid-column: 1 / -1;      /* span all three columns */
+    justify-self: center;
+    font-size: 12px;
+    line-height: 1;
+    color: #444;
+    margin-top: 4px;
+    letter-spacing: .2px;
+  }
+  @media (max-width:600px){
+    .disclaimer{ font-size: 11px; }
+  }
 </style>
 </head>
 <body>
@@ -87,6 +109,9 @@
     <a href="#" id="helpLink">help</a>
   </div>
   <div class="right-id">user id: <span id="userId">—</span></div>
+  <div class="disclaimer" role="note" aria-label="disclaimer">
+    disclaimer: use responsibly and when permitted to do so
+  </div>
 </header>
 
 <main>
