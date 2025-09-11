@@ -366,8 +366,7 @@
         const msg = JSON.parse(e.data);
         if (msg.kind === 'ctrl' && msg.op === 'skip') {
           wasSkipped = true;
-          pushSystem('you just got skipped');
-          cleanup('skipped'); // NEW: explicit reason
+          cleanup('you just got skipped');
           return;
         }
         if (msg.kind === 'chat') pushUserLine(msg.from || 'person', msg.text);
@@ -462,24 +461,46 @@
   }
 
   async function cleanup(reason) {
+    // Preserve current local state (these variables already persist, but we’ll
+    // also re-apply them to tracks after tearing down the peer objects).
+    const prevMicOn = micOn;
+    const prevCamOn = camOn;
+  
+    // Tear down RTCPeerConnection/DataChannel/Room
     try { dc && dc.close(); } catch {}
     dc = null;
     try { pc && pc.close(); } catch {}
     pc = null;
     try { room && (await room.unsubscribe()); } catch {}
     room = null;
-
+  
+    // Reset only REMOTE UI/state
     els.remoteVideo.srcObject = null;
     els.remoteVideo.classList.remove('has-video');
     remoteMicOn = remoteCamOn = null;
+  
+    // General flags (do NOT touch micOn/camOn)
     peerReady = false;
     sentOffer = false;
     didRestartIce = false;
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-    if (handshakeTimer) { clearTimeout(handshakeTimer); handshakeTimer = null; } // NEW
-
+    if (handshakeTimer) { clearTimeout(handshakeTimer); handshakeTimer = null; }
+  
+    // If no explicit reason and we weren't skipped, show generic message
     if (!wasSkipped && !iSkipped && !reason) reason = 'connection lost';
-    updateRemoteState();
+  
+    // Re-apply preserved local track state to keep mute/camera choice
+    micOn = prevMicOn;
+    camOn = prevCamOn;
+    if (localStream) {
+      const a = localStream.getAudioTracks()[0];
+      const v = localStream.getVideoTracks()[0];
+      if (a) a.enabled = !!micOn;
+      if (v) v.enabled = !!camOn;
+    }
+    updateLocalLabel();    // refresh "you (muted / camera off)" label
+    updateRemoteState();   // clears remote labels
+  
     if (reason) pushSystem(reason);
     wasSkipped = false;
     iSkipped = false;
@@ -547,13 +568,15 @@
       } else {
         await mm.track({ waiting: true, ts: Date.now() });
         pushSystem('waiting for someone…');
-        if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1500);
+        onPresenceSync();
+        if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1000);
       }
       return;
     }
     await mm.track({ waiting: true, ts: Date.now() });
     pushSystem('waiting for someone…');
-    if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1500);
+    onPresenceSync();
+    if (!retryTimer) retryTimer = setTimeout(onPresenceSync, 1000);
   }
 
   // UI hooks
