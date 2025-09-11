@@ -100,6 +100,20 @@
   @media (max-width:600px){
     .disclaimer{ font-size: 12px; }
   }
+  
+  .left-online{
+    grid-column:1;
+    justify-self:start;
+    font-size:12px;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .left-online-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:#0aa; /* teal dot; change if you want */
+  }
 </style>
 </head>
 <body>
@@ -110,6 +124,10 @@
     <a href="#" id="helpLink">help</a>
   </div>
   <div class="right-id">user id: <span id="userId">—</span></div>
+  <div class="left-online">
+    <span class="left-online-dot" aria-hidden="true"></span>
+    <span>online: <span id="onlineCount">0</span></span>
+  </div>
   <div class="disclaimer" role="note" aria-label="disclaimer">
     disclaimer: use responsibly and when permitted to do so
   </div>
@@ -182,6 +200,7 @@
     chatForm: document.getElementById('chatForm'),
     chatText: document.getElementById('chatText'),
     joinCta: document.getElementById('joinCta'),
+    onlineCount: document.getElementById('onlineCount')
   };
 
   // id
@@ -663,9 +682,30 @@
     updateRemoteState();
   })();
 
-  // header links inert
+  // header
   document.getElementById('callLink').addEventListener('click', (e) => e.preventDefault());
   document.getElementById('helpLink').addEventListener('click', (e) => e.preventDefault());
+
+  async function refreshOnlineCount() {
+    try {
+      const state = await mm.presenceState();
+      // Each key is a unique user id; metas length may be >1 if they have multiple tabs.
+      const count = Object.keys(state || {}).length;
+      els.onlineCount.textContent = String(count);
+    } catch {
+      // no-op
+    }
+  }
+  mm.on('presence', { event: 'sync'  }, refreshOnlineCount);
+  mm.on('presence', { event: 'join'  }, refreshOnlineCount);
+  mm.on('presence', { event: 'leave' }, refreshOnlineCount);
+  mm.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await mm.track({ waiting: false, ts: Date.now() });
+      refreshOnlineCount(); // initial render
+      await onPresenceSync();
+    }
+  });
 })();
 </script>
 </body>
