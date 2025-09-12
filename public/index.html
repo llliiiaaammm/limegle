@@ -80,39 +80,38 @@
 
 
 
-  /* Make room for a second row in the header */
-  :root { --header-h: 86px; } /* was 48px */
+  :root { --header-h: 86px; } /* gives main a safe min offset */
+
+  header{
+    /* no fixed height; let it grow */
+    height:auto;
+    min-height: var(--header-h);
+    display:grid;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-rows: auto auto;   /* row 1: main, row 2: disclaimer */
+    align-items:center;
+    padding:6px 8px;
+    border-bottom:1px solid #000;
+  }
   
-  /* Header now has two rows: main row + disclaimer row */
-  header { grid-template-rows: auto auto; }
+  /* keep these helpers */
+  .center-group{ grid-column:2; justify-self:center; display:flex; align-items:center; gap:10px; }
+  .right-id{ grid-column:3; justify-self:end; font-size:12px; line-height:1; }
+  .left-online{ grid-column:1; justify-self:start; font-size:12px; line-height:1; display:flex; align-items:center; gap:6px; }
+  .left-online-dot{ width:8px; height:8px; border-radius:50%; background:#0aa; }
   
-  /* Disclaimer style */
   .disclaimer{
-    grid-column: 1 / -1;      /* span all three columns */
+    grid-column: 1 / -1;     /* span all three columns */
     justify-self: center;
     font-size: 14px;
     line-height: 1;
     color: #ff0f0f;
-    margin-top: 2px;
     letter-spacing: .2px;
     font-weight: bold;
+    margin-top: 2px;
   }
   @media (max-width:600px){
     .disclaimer{ font-size: 12px; }
-  }
-  
-  .left-online{
-    grid-column:1;
-    justify-self:start;
-    font-size:12px;
-    line-height:1;
-    display:flex;
-    align-items:center;
-    gap:6px;
-  }
-  .left-online-dot{
-    width:8px;height:8px;border-radius:50%;
-    background:#0aa; /* teal dot; change if you want */
   }
 </style>
 </head>
@@ -467,7 +466,16 @@
     await room.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         await startCallFlow(asCaller);
-        // NEW: handshake timeout—if DC never opens, rematch
+    
+        // announce you're ready only after the room is joined
+        await room.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: { t: 'ready' }
+        });
+    
+        // handshake timeout (guard against duplicates)
+        if (handshakeTimer) clearTimeout(handshakeTimer);
         handshakeTimer = setTimeout(() => {
           if (!dc || dc.readyState !== 'open') {
             cleanup('connection timed out');
@@ -475,7 +483,6 @@
           }
         }, 8000);
       }
-      await room.send({ type: 'broadcast', event: 'signal', payload: { t: 'ready' }});
     });
   }
 
@@ -699,13 +706,6 @@
   mm.on('presence', { event: 'sync'  }, refreshOnlineCount);
   mm.on('presence', { event: 'join'  }, refreshOnlineCount);
   mm.on('presence', { event: 'leave' }, refreshOnlineCount);
-  mm.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED') {
-      await mm.track({ waiting: false, ts: Date.now() });
-      refreshOnlineCount(); // initial render
-      await onPresenceSync();
-    }
-  });
 })();
 </script>
 </body>
