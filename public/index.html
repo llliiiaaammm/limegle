@@ -257,6 +257,7 @@
   let peerReady = false, sentOffer = false, userInteracted = false;
   let peerId = null, didRestartIce = false, wasSkipped = false, iSkipped = false, retryTimer = null;
   let handshakeTimer = null; // NEW
+  let announcedConnected = false;
 
   const ICE_SERVERS =
     ENV.ICE_SERVERS && ENV.ICE_SERVERS.length
@@ -401,13 +402,29 @@
 
   function attachDC() {
     dc.onopen = () => {
-      if (handshakeTimer) { clearTimeout(handshakeTimer); handshakeTimer = null; } // NEW
+      // tell the peer who we are
+      try { dc.send(JSON.stringify({ kind: 'hello', from: uid })); } catch {}
+      // if we already know them (e.g., we invited), announce now
+      if (peerId && !announcedConnected) {
+        pushSystem(`connected with ${peerId}`);
+        announcedConnected = true;
+      }
       sendState();
-      pushSystem(`connected with ${peerId || 'person'}`);
     };
+  
     dc.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+  
+        if (msg.kind === 'hello') {
+          if (!peerId && msg.from) peerId = msg.from;
+          if (!announcedConnected && peerId) {
+            pushSystem(`connected with ${peerId}`);
+            announcedConnected = true;
+          }
+          return;
+        }
+  
         if (msg.kind === 'ctrl' && msg.op === 'skip') {
           wasSkipped = true;
           cleanup('you just got skipped');
@@ -532,6 +549,7 @@
     remoteMicOn = remoteCamOn = null;
   
     // General flags (do NOT touch micOn/camOn)
+    announcedConnected = false;
     peerReady = false;
     sentOffer = false;
     didRestartIce = false;
