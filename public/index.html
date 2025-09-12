@@ -80,37 +80,63 @@
 
 
 
-  :root { --header-h: 48px; } /* single-row header height */
+  :root { --header-h: 72px; } /* adjust if you want more/less header height */
 
-  /* One-row header; allow absolute children */
+  /* two-row header */
   header{
     height: var(--header-h);
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 1fr auto 1fr; /* left | center | right */
+    grid-template-rows: 24px 1fr;        /* row 1: status strip, row 2: main */
     align-items: center;
-    padding: 4px 4px;
+    padding: 4px 8px;
     border-bottom: 1px solid #000;
-    position: relative;            /* enable absolute positioning inside */
   }
   
-  /* helpers (unchanged) */
-  .center-group{ grid-column:2; justify-self:center; display:flex; align-items:center; gap:10px; }
-  .right-id{ grid-column:3; justify-self:end; font-size:12px; line-height:1; }
-  .left-online{ grid-column:1; justify-self:start; font-size:12px; line-height:1; display:flex; align-items:center; gap:6px; }
-  .left-online-dot{ width:8px; height:8px; border-radius:50%; background:#0aa; }
+  /* row 2: main title/links centered */
+  .center-group{
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: center;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
   
-  /* disclaimer centered in the SAME row */
+  /* row 1: left + right status */
+  .left-online{
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    font-size: 12px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .left-online-dot{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #0aa;
+  }
+  .right-id{
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    font-size: 12px;
+    line-height: 1;
+  }
+  
+  /* row 1: centered disclaimer */
   .disclaimer{
-    position: absolute;
-    top: 6px;                     /* aligns with header content */
-    left: 50%;
-    transform: translateX(-50%);
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
     font-size: 14px;
     line-height: 1;
     color: #ff0f0f;
     letter-spacing: .2px;
     font-weight: bold;
-    pointer-events: none;         /* don't block clicks on header links */
+    pointer-events: none;  /* don't block clicks on links */
   }
   
   @media (max-width:600px){
