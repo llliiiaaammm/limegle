@@ -80,36 +80,39 @@
 
 
 
-  :root { --header-h: 86px; } /* gives main a safe min offset */
+  :root { --header-h: 48px; } /* single-row header height */
 
+  /* One-row header; allow absolute children */
   header{
-    /* no fixed height; let it grow */
-    height:auto;
-    min-height: var(--header-h);
-    display:grid;
+    height: var(--header-h);
+    display: grid;
     grid-template-columns: 1fr auto 1fr;
-    grid-template-rows: auto auto;   /* row 1: main, row 2: disclaimer */
-    align-items:center;
-    padding:4px 4px;
-    border-bottom:1px solid #000;
+    align-items: center;
+    padding: 4px 4px;
+    border-bottom: 1px solid #000;
+    position: relative;            /* enable absolute positioning inside */
   }
   
-  /* keep these helpers */
+  /* helpers (unchanged) */
   .center-group{ grid-column:2; justify-self:center; display:flex; align-items:center; gap:10px; }
   .right-id{ grid-column:3; justify-self:end; font-size:12px; line-height:1; }
   .left-online{ grid-column:1; justify-self:start; font-size:12px; line-height:1; display:flex; align-items:center; gap:6px; }
   .left-online-dot{ width:8px; height:8px; border-radius:50%; background:#0aa; }
   
+  /* disclaimer centered in the SAME row */
   .disclaimer{
-    grid-column: 1 / -1;     /* span all three columns */
-    justify-self: center;
+    position: absolute;
+    top: 6px;                     /* aligns with header content */
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 14px;
     line-height: 1;
     color: #ff0f0f;
     letter-spacing: .2px;
     font-weight: bold;
-    margin-top: 2px;
+    pointer-events: none;         /* don't block clicks on header links */
   }
+  
   @media (max-width:600px){
     .disclaimer{ font-size: 12px; }
   }
