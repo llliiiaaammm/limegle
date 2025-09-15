@@ -154,7 +154,7 @@
     <span>online: <span id="onlineCount">0</span></span>
   </div>
   <div class="disclaimer" role="note" aria-label="disclaimer">
-    disclaimer: this site is not to be used during school hours
+    disclaimer: use responsably
   </div>
 </header>
 
@@ -199,12 +199,18 @@
 <!-- join overlay -->
 <div id="joinCta" role="button" tabindex="0">
   <div class="joinbox">
-    ATTENTION: THIS SITE IS NOT TO BE USED DURING SCHOOL HOURS
-    <div style="font-size:12px;margin-top:4px">as of 9/12 you are not to access this site during school hours</div>
+    TAP TO JOIN PUBLIC CHAT
+    <div style="font-size:12px;margin-top:4px">press here to call</div>
   </div>
 </div>
 
 <script>
+  const now = new Date();
+  const hours = now.getHours();
+  while (hours >= 8 && hours < 14) {
+    alert("sorry guys, but the school told me to take it down during school hours")
+  }
+  
 /* global supabase, ENV */
 (() => {
   // elements
