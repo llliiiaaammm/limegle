@@ -205,10 +205,12 @@
 </div>
 
 <script>
-  const now = new Date();
-  const hours = now.getHours();
-  while (hours >= 8 && hours < 14) {
-    alert("sorry guys, but the school told me to take it down during school hours")
+  while (true) {
+    if (prompt("enter password:") == "leverage") {
+      break
+    } else {
+      alert("incorrect")
+    }
   }
   
 /* global supabase, ENV */
