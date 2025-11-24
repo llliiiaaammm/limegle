@@ -296,6 +296,24 @@
     if (cam === false) bits.push('camera off');
     return bits.length ? `${name} (${bits.join(' and ')})` : name;
   }
+  function updateLocalLabel() {
+    els.localLabel.textContent = labelWithState('you', micOn, camOn);
+    const bits = [];
+    //if (!micOn) bits.push('mic off');
+    //if (!camOn) bits.push('camera off');
+    els.localRibbon.textContent = bits.join(', ');
+  }
+  function updateRemoteState() {
+    els.remoteLabel.textContent = labelWithState('person', remoteMicOn, remoteCamOn);
+    els.remoteMicInd.textContent =
+      remoteMicOn === null ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
+    els.remoteCamInd.textContent =
+      remoteCamOn === null ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
+    const parts = [];
+    //if (remoteMicOn === false) parts.push('mic off');
+    //if (remoteCamOn === false) parts.push('camera off');
+    els.remoteRibbon.textContent = parts.join(', ');
+  }
 
   // media
   async function safeGetMedia() {
@@ -309,6 +327,7 @@
       micOn = true; camOn = true;
     } catch (err) {
       micOn = false; camOn = false;
+      updateLocalLabel();
       pushSystem('it looks like your camera/video is blocked.');
     }
     return localStream;
@@ -319,6 +338,7 @@
     const v = localStream.getVideoTracks()[0];
     if (a) a.enabled = !!micOn;
     if (v) v.enabled = !!camOn;
+    updateLocalLabel();
   }
   function sendState() {
     if (dc && dc.readyState === 'open') {
@@ -354,6 +374,7 @@
         Promise.resolve(els.remoteVideo.play()).catch(() => {});
       }
       remoteCamOn = true;
+      updateRemoteState();
     };
 
     pc.onconnectionstatechange = async () => {
@@ -421,6 +442,7 @@
         else if (msg.kind === 'state') {
           remoteMicOn = !!msg.mic;
           remoteCamOn = !!msg.cam;
+          updateRemoteState();
         }
       } catch {
         pushUserLine('person', String(e.data));
@@ -554,6 +576,8 @@
       if (a) a.enabled = !!micOn;
       if (v) v.enabled = !!camOn;
     }
+    updateLocalLabel();    // refresh "you (muted / camera off)" label
+    updateRemoteState();   // clears remote labels
   
     if (reason) pushSystem(reason);
     wasSkipped = false;
@@ -714,6 +738,7 @@
   (async () => {
     await safeGetMedia();
     applyLocalTrackState();
+    updateRemoteState();
   })();
 
   // header
