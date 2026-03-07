@@ -205,12 +205,10 @@
 </div>
 
 <script>
-  while (true) {
-    if (prompt("enter password:") == "leverage") {
-      break
-    } else {
-      alert("incorrect")
-    }
+  const pw = prompt("enter password:");
+  if (pw !== "leverage") {
+    alert("incorrect");
+    throw new Error("wrong password");
   }
   
 /* global supabase, ENV */
@@ -305,13 +303,14 @@
   }
   function updateRemoteState() {
     els.remoteLabel.textContent = labelWithState('person', remoteMicOn, remoteCamOn);
+  
     els.remoteMicInd.textContent =
-      //remoteMicOn === null ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
+      remoteMicOn === null ? '' : `mic: ${remoteMicOn ? 'on' : 'off'}`;
+  
     els.remoteCamInd.textContent =
-      //remoteCamOn === null ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
+      remoteCamOn === null ? '' : `cam: ${remoteCamOn ? 'on' : 'off'}`;
+  
     const parts = [];
-    //if (remoteMicOn === false) parts.push('mic off');
-    //if (remoteCamOn === false) parts.push('camera off');
     els.remoteRibbon.textContent = parts.join(', ');
   }
 
